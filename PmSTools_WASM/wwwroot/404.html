@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PmSTools</title>
+  <script>
+    // Redirect GitHub Pages SPA routes to index.html
+    var redirect = window.location.pathname.replace('/PmSTools_WASM', '');
+    var newUrl = '/PmSTools_WASM/' + (redirect.startsWith('/') ? redirect.substring(1) : redirect);
+    window.location.replace(newUrl);
+  </script>
+</head>
+<body></body>
+</html>
