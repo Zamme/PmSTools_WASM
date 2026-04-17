@@ -1,0 +1,36 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/PmSTools_WASM/PmSTools_WASM.csproj"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$msCompile"
+      ]
+    },
+    {
+      "label": "watch run",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "watch",
+        "--project",
+        "${workspaceFolder}/PmSTools_WASM/PmSTools_WASM.csproj",
+        "run"
+      ],
+      "isBackground": true,
+      "problemMatcher": [
+        "$msCompile"
+      ]
+    }
+  ]
+}

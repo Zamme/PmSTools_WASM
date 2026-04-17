@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run PmSTools_WASM",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/PmSTools_WASM/PmSTools_WASM.csproj"
+      ],
+      "cwd": "${workspaceFolder}",
+      "launchBrowser": {
+        "enabled": true,
+        "args": "${auto-detect-url}"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "console": "internalConsole"
+    }
+  ]
+}

@@ -1,0 +1,456 @@
+@page "/code2barcode"
+@implements IAsyncDisposable
+@inject BarcodeStorage Storage
+@inject BarcodeParser Parser
+@inject IJSRuntime JS
+
+<section class="hero">
+    <div>
+        <h1>Code to Barcode</h1>
+        <p>Capture a label, extract codes, and print clean barcodes in one pass. Works with camera or file uploads.</p>
+        <div class="hero-cta">
+            <button class="btn-primary" @onclick="StartCameraAsync" disabled="@IsBusy">Start camera</button>
+            <button class="btn-secondary" @onclick="CaptureFromCameraAsync" disabled="@(!IsCameraOn || IsBusy)">Capture and read</button>
+            <button class="btn-ghost" @onclick="StopCameraAsync" disabled="@(!IsCameraOn)">Stop camera</button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="notice" style="margin-top: 12px;">@StatusMessage</div>
+        }
+    </div>
+    <div class="camera-box">
+        <video id="cameraStream" playsinline muted></video>
+        <div class="camera-status">@CameraStatus</div>
+    </div>
+</section>
+
+<div class="panel-grid">
+    <div class="panel">
+        <div class="panel-header">
+            <h2>OCR input</h2>
+            <span class="badge">Image or camera</span>
+        </div>
+        <p>Upload a photo if the camera is unavailable. We will run OCR in-browser.</p>
+        <div class="stack">
+            <InputFile OnChange="HandleFileSelected" accept="image/*" />
+            @if (IsBusy)
+            {
+                <div class="loading" aria-live="polite">
+                    <span></span><span></span><span></span>
+                    Reading text...
+                </div>
+            }
+            <textarea class="ocr-preview" placeholder="OCR text will appear here" @bind="OcrText"></textarea>
+            <button class="btn-ghost" @onclick="RebuildFromOcrText" disabled="@IsBusy">Rebuild codes from text</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Prefixes</h2>
+            <span class="badge">Filtering</span>
+        </div>
+        <p>Only codes that begin with an enabled prefix are kept.</p>
+        <div class="stack">
+            @if (Prefixes.Count == 0)
+            {
+                <div class="notice">No prefixes yet. Add at least one to enable extraction.</div>
+            }
+            else
+            {
+                @foreach (var prefix in Prefixes)
+                {
+                    <div class="prefix-pill">
+                        <label>
+                            <input type="checkbox" checked="@prefix.IsActive" @onchange="(args) => TogglePrefix(prefix, args)" />
+                            <span class="prefix-value">@prefix.Value</span>
+                        </label>
+                        <button class="btn-ghost" @onclick="() => RemovePrefix(prefix)">Remove</button>
+                    </div>
+                }
+            }
+            <div class="input-row">
+                <input placeholder="Add prefix" @bind="NewPrefix" />
+                <button class="btn-primary" @onclick="AddPrefix">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="panel" style="margin-top: 24px;">
+    <div class="panel-header">
+        <h2>Last codes</h2>
+        <span class="badge">@LastCodes.Count found</span>
+    </div>
+    <p>These are the codes extracted from the most recent OCR run.</p>
+
+    @if (LastCodes.Count == 0)
+    {
+        <div class="notice">No codes parsed yet. Capture or upload a label to begin.</div>
+    }
+    else
+    {
+        <div class="code-list">
+            @foreach (var entry in LastCodes)
+            {
+                <div class="code-card">
+                    <div class="barcode-wrap">
+                        <svg id="@($"barcode-{entry.Id}")"></svg>
+                    </div>
+                    <div class="code-card-header">
+                        <div class="code-id">@entry.Code</div>
+                        @if (entry.IsSaved)
+                        {
+                            <span class="status-pill">Saved</span>
+                        }
+                    </div>
+                    @if (entry.IsEditing)
+                    {
+                        <div class="input-row">
+                            <input @bind="entry.EditValue" />
+                        </div>
+                    }
+                    <div class="code-actions">
+                        @if (entry.IsEditing)
+                        {
+                            <button class="btn-primary" @onclick="() => ApplyEdit(entry)">Save edit</button>
+                            <button class="btn-ghost" @onclick="() => CancelEdit(entry)">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="btn-ghost" @onclick="() => BeginEdit(entry)">Edit</button>
+                        }
+                        @if (!entry.IsSaved)
+                        {
+                            <button class="btn-secondary" @onclick="() => SaveCode(entry)">Save code</button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<div class="panel" style="margin-top: 24px;">
+    <div class="panel-header">
+        <h2>Saved codes</h2>
+        <span class="badge">@SavedEntries.Count total</span>
+    </div>
+    <p>These stay available in this browser, ready for reprint.</p>
+
+    @if (SavedEntries.Count == 0)
+    {
+        <div class="notice">No saved codes yet.</div>
+    }
+    else
+    {
+        <div class="code-list">
+            @foreach (var entry in SavedEntries)
+            {
+                <div class="code-card">
+                    <div class="barcode-wrap">
+                        <svg id="@($"saved-{entry.Id}")"></svg>
+                    </div>
+                    <div class="code-card-header">
+                        <div class="code-id">@entry.Code</div>
+                        <span class="status-pill">Saved</span>
+                    </div>
+                    <div class="code-actions">
+                        <button class="btn-ghost" @onclick="() => RemoveSavedCode(entry)">Remove</button>
+                    </div>
+                </div>
+            }
+        </div>
+        <div style="margin-top: 12px;">
+            <button class="btn-ghost" @onclick="ClearSavedCodes">Clear all</button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<PrefixItem> Prefixes { get; set; } = new();
+    private List<BarcodeEntry> LastCodes { get; set; } = new();
+    private List<BarcodeEntry> SavedEntries { get; set; } = new();
+    private string? OcrText { get; set; }
+    private string? StatusMessage { get; set; }
+    private string? NewPrefix { get; set; }
+    private bool IsBusy { get; set; }
+    private bool IsCameraOn { get; set; }
+    private bool _needsBarcodeRender;
+
+    private string CameraStatus => IsCameraOn ? "Camera live" : "Camera off";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Prefixes = await Storage.GetPrefixesAsync();
+        var savedCodes = await Storage.GetSavedCodesAsync();
+        var lastCodes = await Storage.GetLastCodesAsync();
+
+        SavedEntries = BuildEntries(savedCodes, savedCodes);
+        LastCodes = BuildEntries(lastCodes, savedCodes);
+        _needsBarcodeRender = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_needsBarcodeRender)
+        {
+            return;
+        }
+
+        _needsBarcodeRender = false;
+
+        foreach (var entry in LastCodes)
+        {
+            await JS.InvokeVoidAsync("pmstools.renderBarcode", $"barcode-{entry.Id}", entry.Code);
+        }
+
+        foreach (var entry in SavedEntries)
+        {
+            await JS.InvokeVoidAsync("pmstools.renderBarcode", $"saved-{entry.Id}", entry.Code);
+        }
+    }
+
+    private async Task StartCameraAsync()
+    {
+        StatusMessage = null;
+        IsBusy = true;
+        try
+        {
+            var started = await JS.InvokeAsync<bool>("pmstools.startCamera", "cameraStream");
+            IsCameraOn = started;
+            StatusMessage = started ? "Camera ready. Aim at the label." : "Camera not available in this browser.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Camera error: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task StopCameraAsync()
+    {
+        await JS.InvokeVoidAsync("pmstools.stopCamera", "cameraStream");
+        IsCameraOn = false;
+        StatusMessage = "Camera stopped.";
+    }
+
+    private async Task CaptureFromCameraAsync()
+    {
+        if (!IsCameraOn)
+        {
+            StatusMessage = "Start the camera first.";
+            return;
+        }
+
+        await RunOcrAsync(async () =>
+        {
+            var dataUrl = await JS.InvokeAsync<string?>("pmstools.captureFrameDataUrl", "cameraStream");
+            if (string.IsNullOrWhiteSpace(dataUrl))
+            {
+                throw new InvalidOperationException("Unable to capture frame.");
+            }
+
+            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl);
+        });
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (file == null)
+        {
+            return;
+        }
+
+        await RunOcrAsync(async () =>
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 6 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var bytes = memoryStream.ToArray();
+            var base64 = Convert.ToBase64String(bytes);
+            var dataUrl = $"data:{file.ContentType};base64,{base64}";
+            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl);
+        });
+    }
+
+    private async Task RunOcrAsync(Func<Task<string>> ocrOperation)
+    {
+        IsBusy = true;
+        StatusMessage = "Reading text...";
+
+        try
+        {
+            var text = await ocrOperation();
+            OcrText = text;
+            await RebuildFromOcrText();
+            StatusMessage = "OCR completed.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"OCR failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task RebuildFromOcrText()
+    {
+        var activePrefixes = Prefixes.Where(prefix => prefix.IsActive).Select(prefix => prefix.Value).ToList();
+        var parsed = Parser.ParseCodes(OcrText ?? string.Empty, activePrefixes);
+        var savedCodes = await Storage.GetSavedCodesAsync();
+
+        LastCodes = BuildEntries(parsed, savedCodes);
+        await Storage.SaveLastCodesAsync(parsed);
+        _needsBarcodeRender = true;
+        StateHasChanged();
+    }
+
+    private async Task TogglePrefix(PrefixItem prefix, ChangeEventArgs args)
+    {
+        prefix.IsActive = args?.Value switch
+        {
+            bool value => value,
+            string text => string.Equals(text, "true", StringComparison.OrdinalIgnoreCase),
+            _ => prefix.IsActive
+        };
+        await Storage.SavePrefixesAsync(Prefixes);
+        await RebuildFromOcrText();
+    }
+
+    private async Task RemovePrefix(PrefixItem prefix)
+    {
+        Prefixes.Remove(prefix);
+        await Storage.SavePrefixesAsync(Prefixes);
+        await RebuildFromOcrText();
+    }
+
+    private async Task AddPrefix()
+    {
+        var value = (NewPrefix ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        if (Prefixes.Any(prefix => string.Equals(prefix.Value, value, StringComparison.OrdinalIgnoreCase)))
+        {
+            NewPrefix = string.Empty;
+            return;
+        }
+
+        Prefixes.Add(new PrefixItem(value, true));
+        NewPrefix = string.Empty;
+        await Storage.SavePrefixesAsync(Prefixes);
+        await RebuildFromOcrText();
+    }
+
+    private async Task SaveCode(BarcodeEntry entry)
+    {
+        if (entry.IsSaved)
+        {
+            return;
+        }
+
+        var savedCodes = await Storage.GetSavedCodesAsync();
+        savedCodes.Add(entry.Code.ToUpperInvariant());
+        await Storage.SaveSavedCodesAsync(savedCodes);
+        entry.IsSaved = true;
+        RefreshSavedEntries(savedCodes);
+    }
+
+    private async Task RemoveSavedCode(BarcodeEntry entry)
+    {
+        var savedCodes = await Storage.GetSavedCodesAsync();
+        savedCodes.RemoveAll(code => string.Equals(code, entry.Code, StringComparison.OrdinalIgnoreCase));
+        await Storage.SaveSavedCodesAsync(savedCodes);
+        RefreshSavedEntries(savedCodes);
+        UpdateSavedStatusOnLastCodes(savedCodes);
+    }
+
+    private async Task ClearSavedCodes()
+    {
+        await Storage.SaveSavedCodesAsync(new List<string>());
+        RefreshSavedEntries(new List<string>());
+        UpdateSavedStatusOnLastCodes(new List<string>());
+    }
+
+    private void BeginEdit(BarcodeEntry entry)
+    {
+        entry.EditValue = entry.Code;
+        entry.IsEditing = true;
+    }
+
+    private async Task ApplyEdit(BarcodeEntry entry)
+    {
+        var updated = (entry.EditValue ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(updated))
+        {
+            entry.IsEditing = false;
+            entry.EditValue = entry.Code;
+            return;
+        }
+
+        var previous = entry.Code;
+        entry.Code = updated;
+        entry.EditValue = updated;
+        entry.IsEditing = false;
+
+        var codes = LastCodes.Select(item => item.Code).ToList();
+        await Storage.SaveLastCodesAsync(codes);
+
+        if (entry.IsSaved)
+        {
+            var savedCodes = await Storage.GetSavedCodesAsync();
+            savedCodes.RemoveAll(code => string.Equals(code, previous, StringComparison.OrdinalIgnoreCase));
+            savedCodes.Add(updated);
+            await Storage.SaveSavedCodesAsync(savedCodes);
+            RefreshSavedEntries(savedCodes);
+            UpdateSavedStatusOnLastCodes(savedCodes);
+        }
+
+        _needsBarcodeRender = true;
+    }
+
+    private void CancelEdit(BarcodeEntry entry)
+    {
+        entry.IsEditing = false;
+        entry.EditValue = entry.Code;
+    }
+
+    private void RefreshSavedEntries(List<string> savedCodes)
+    {
+        SavedEntries = BuildEntries(savedCodes, savedCodes);
+        _needsBarcodeRender = true;
+        StateHasChanged();
+    }
+
+    private void UpdateSavedStatusOnLastCodes(List<string> savedCodes)
+    {
+        var savedSet = new HashSet<string>(savedCodes, StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in LastCodes)
+        {
+            entry.IsSaved = savedSet.Contains(entry.Code);
+        }
+    }
+
+    private static List<BarcodeEntry> BuildEntries(IEnumerable<string> codes, IEnumerable<string> savedCodes)
+    {
+        var savedSet = new HashSet<string>(savedCodes ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        return codes.Select(code => new BarcodeEntry(code, savedSet.Contains(code))).ToList();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (IsCameraOn)
+        {
+            await JS.InvokeVoidAsync("pmstools.stopCamera", "cameraStream");
+        }
+    }
+}
