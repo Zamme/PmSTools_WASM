@@ -5,7 +5,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PmSTools</title>
-    <base href="/" />
+    <base href="/" id="app-base" />
+    <script>
+        (function () {
+            var base = document.getElementById("app-base");
+            if (!base) {
+                return;
+            }
+
+            var repoBase = "/PmSTools_WASM/";
+            var path = window.location.pathname || "/";
+            if (path.startsWith(repoBase)) {
+                base.setAttribute("href", repoBase);
+            } else {
+                base.setAttribute("href", "/");
+            }
+        })();
+    </script>
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
