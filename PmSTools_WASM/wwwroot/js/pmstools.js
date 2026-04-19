@@ -2,20 +2,18 @@ window.pmstools = {
   loadTesseract: (function () {
     let loadPromise = null;
 
-    function isIOS() {
-      const ua = navigator.userAgent || "";
-      const isIOSDevice = /iPad|iPhone|iPod/.test(ua);
-      const isIPadOS = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-      return isIOSDevice || isIPadOS;
+    function toAbsoluteUrl(path) {
+      return new URL(path, document.baseURI || "/").toString();
     }
 
-    function supportsClassStaticBlocks() {
-      try {
-        new Function("class A { static { } }");
-        return true;
-      } catch (error) {
-        return false;
+    function configureTesseractPaths() {
+      if (!window.Tesseract) {
+        return;
       }
+
+      window.Tesseract.workerPath = toAbsoluteUrl("lib/tesseract/worker.min.js");
+      window.Tesseract.corePath = toAbsoluteUrl("lib/tesseract/tesseract-core.wasm.js");
+      window.Tesseract.langPath = toAbsoluteUrl("lib/tesseract/lang/");
     }
 
     function loadScript(src) {
@@ -31,14 +29,13 @@ window.pmstools = {
 
     return async function () {
       if (window.Tesseract && window.Tesseract.recognize) {
+        configureTesseractPaths();
         return true;
       }
 
       if (!loadPromise) {
-        const modernUrl = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
-        const legacyUrl = "https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js";
-        const preferLegacy = isIOS() || !supportsClassStaticBlocks();
-        const urls = preferLegacy ? [legacyUrl, modernUrl] : [modernUrl, legacyUrl];
+        const localLegacyUrl = toAbsoluteUrl("lib/tesseract/tesseract.min.js");
+        const urls = [localLegacyUrl];
 
         loadPromise = (async () => {
           for (const url of urls) {
@@ -49,6 +46,7 @@ window.pmstools = {
               continue;
             }
 
+            configureTesseractPaths();
             if (window.Tesseract && window.Tesseract.recognize) {
               return true;
             }
