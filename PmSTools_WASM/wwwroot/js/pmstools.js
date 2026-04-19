@@ -2,6 +2,13 @@ window.pmstools = {
   loadTesseract: (function () {
     let loadPromise = null;
 
+    function isIOS() {
+      const ua = navigator.userAgent || "";
+      const isIOSDevice = /iPad|iPhone|iPod/.test(ua);
+      const isIPadOS = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+      return isIOSDevice || isIPadOS;
+    }
+
     function supportsClassStaticBlocks() {
       try {
         new Function("class A { static { } }");
@@ -30,11 +37,25 @@ window.pmstools = {
       if (!loadPromise) {
         const modernUrl = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
         const legacyUrl = "https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js";
-        const url = supportsClassStaticBlocks() ? modernUrl : legacyUrl;
-        loadPromise = loadScript(url).catch(error => {
-          console.warn("Tesseract load failed", error);
+        const preferLegacy = isIOS() || !supportsClassStaticBlocks();
+        const urls = preferLegacy ? [legacyUrl, modernUrl] : [modernUrl, legacyUrl];
+
+        loadPromise = (async () => {
+          for (const url of urls) {
+            try {
+              await loadScript(url);
+            } catch (error) {
+              console.warn("Tesseract load failed", error);
+              continue;
+            }
+
+            if (window.Tesseract && window.Tesseract.recognize) {
+              return true;
+            }
+          }
+
           return false;
-        });
+        })();
       }
 
       const loaded = await loadPromise;

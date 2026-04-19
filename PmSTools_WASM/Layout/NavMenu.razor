@@ -1,4 +1,9 @@
-﻿<nav class="app-nav">
-    <NavLink href="" Match="NavLinkMatch.All">Overview</NavLink>
-    <NavLink href="code2barcode">Code to Barcode</NavLink>
+﻿<nav class="app-nav" aria-label="Main">
+    <details class="nav-dropdown">
+        <summary class="nav-trigger">Menu</summary>
+        <div class="nav-menu" role="menu">
+            <NavLink href="" Match="NavLinkMatch.All" class="nav-item" role="menuitem">Overview</NavLink>
+            <NavLink href="code2barcode" class="nav-item" role="menuitem">Code to Barcode</NavLink>
+        </div>
+    </details>
 </nav>

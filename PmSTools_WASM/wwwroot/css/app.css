@@ -82,23 +82,68 @@ button, input, textarea {
 .app-nav {
     display: flex;
     gap: 12px;
+    position: relative;
 }
 
-.app-nav a {
+.nav-dropdown {
+    position: relative;
+}
+
+.nav-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 6px 12px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(50, 56, 66, 0.15);
     color: var(--ink-soft);
     font-weight: 600;
     font-size: 0.9rem;
-    transition: 0.2s ease;
+    cursor: pointer;
+    list-style: none;
 }
 
-.app-nav a.active {
+.nav-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.nav-trigger::after {
+    content: "\25BE";
+    font-size: 0.7rem;
+    margin-top: 1px;
+}
+
+.nav-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    min-width: 190px;
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid rgba(215, 207, 196, 0.8);
+    box-shadow: 0 12px 22px rgba(15, 18, 21, 0.12);
+    z-index: 20;
+}
+
+.nav-menu .nav-item {
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: var(--ink-soft);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.nav-menu .nav-item.active {
     background: var(--accent-muted);
-    border-color: rgba(255, 138, 61, 0.4);
     color: var(--ink);
+}
+
+.nav-dropdown:not([open]) .nav-menu {
+    display: none;
 }
 
 .app-main {
@@ -418,8 +463,16 @@ button, input, textarea {
         font-size: 0.7rem;
     }
 
-    .app-nav a {
+    .nav-trigger {
         padding: 6px 10px;
+        font-size: 0.85rem;
+    }
+
+    .nav-menu {
+        min-width: 170px;
+    }
+
+    .nav-menu .nav-item {
         font-size: 0.85rem;
     }
 
