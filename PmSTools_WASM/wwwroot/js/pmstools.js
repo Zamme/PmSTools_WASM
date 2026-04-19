@@ -1,4 +1,46 @@
 window.pmstools = {
+  loadTesseract: (function () {
+    let loadPromise = null;
+
+    function supportsClassStaticBlocks() {
+      try {
+        new Function("class A { static { } }");
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error("Failed to load " + src));
+        document.head.appendChild(script);
+      });
+    }
+
+    return async function () {
+      if (window.Tesseract && window.Tesseract.recognize) {
+        return true;
+      }
+
+      if (!loadPromise) {
+        const modernUrl = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+        const legacyUrl = "https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js";
+        const url = supportsClassStaticBlocks() ? modernUrl : legacyUrl;
+        loadPromise = loadScript(url).catch(error => {
+          console.warn("Tesseract load failed", error);
+          return false;
+        });
+      }
+
+      const loaded = await loadPromise;
+      return !!loaded && !!(window.Tesseract && window.Tesseract.recognize);
+    };
+  })(),
   storageAvailable: function () {
     try {
       const testKey = "pmstools.storage.test";
@@ -82,8 +124,9 @@ window.pmstools = {
       return "";
     }
 
-    if (!window.Tesseract || !window.Tesseract.recognize) {
-      throw new Error("Tesseract not loaded");
+    const loaded = await window.pmstools.loadTesseract();
+    if (!loaded) {
+      throw new Error("Tesseract not available in this browser");
     }
 
     const result = await window.Tesseract.recognize(dataUrl, "eng");
