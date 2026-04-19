@@ -3,23 +3,45 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>PmSTools</title>
-    <base href="/" />
-    <link href="_framework/dotnet.lgnd1ki5rw.js" rel="preload" as="script" fetchpriority="high" crossorigin="anonymous" integrity="sha256-+3aW10dcESqzAfOER0UcdTdu68OXI1SC2KMfoKP2bc0=" />
+    <base href="/" id="app-base" />
+    <script>
+        (function () {
+            var base = document.getElementById("app-base");
+            if (!base) {
+                return;
+            }
+
+            var repoBase = "/PmSTools_WASM/";
+            var path = window.location.pathname || "/";
+            if (path.startsWith(repoBase)) {
+                base.setAttribute("href", repoBase);
+            } else {
+                base.setAttribute("href", "/");
+            }
+        })();
+    </script>
+    <link href="_framework/dotnet.qiczqd5tir.js" rel="preload" as="script" fetchpriority="high" crossorigin="anonymous" integrity="sha256-3perOxn17o/Ooh/Udb5Iin7KkdZdMC2PRqNmxKmN7Zg=" />
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#ff8a3d" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PmSTools" />
     <link href="PmSTools_WASM.styles.css" rel="stylesheet" />
     <script type="importmap">{
   "imports": {
     "./_content/Microsoft.DotNet.HotReload.WebAssembly.Browser/Microsoft.DotNet.HotReload.WebAssembly.Browser.lib.module.js": "./_content/Microsoft.DotNet.HotReload.WebAssembly.Browser/Microsoft.DotNet.HotReload.WebAssembly.Browser.99zm1jdh75.lib.module.js",
     "./_framework/blazor.webassembly.js": "./_framework/blazor.webassembly.66stpp682q.js",
-    "./_framework/dotnet.js": "./_framework/dotnet.lgnd1ki5rw.js",
     "./_framework/dotnet.native.js": "./_framework/dotnet.native.4xbsgn06op.js",
+    "./_framework/dotnet.js": "./_framework/dotnet.qiczqd5tir.js",
     "./_framework/dotnet.runtime.js": "./_framework/dotnet.runtime.zj9dll5ffg.js",
     "./js/pmstools.js": "./js/pmstools.megi1l04yj.js",
     "./lib/bootstrap/dist/js/bootstrap.js": "./lib/bootstrap/dist/js/bootstrap.6eg9f50bds.js",
@@ -35,10 +57,10 @@
     "./_content/Microsoft.DotNet.HotReload.WebAssembly.Browser/Microsoft.DotNet.HotReload.WebAssembly.Browser.lib.module.js": "sha256-A8e6zZwhOqf7lDQqbbCYcAUv4wGE9aQxOo4WyYxR//0=",
     "./_framework/blazor.webassembly.66stpp682q.js": "sha256-3lCWrko3zwspV40aQhs2S/IMkRSarnHRKIdkHhuXIBA=",
     "./_framework/blazor.webassembly.js": "sha256-3lCWrko3zwspV40aQhs2S/IMkRSarnHRKIdkHhuXIBA=",
-    "./_framework/dotnet.js": "sha256-+3aW10dcESqzAfOER0UcdTdu68OXI1SC2KMfoKP2bc0=",
-    "./_framework/dotnet.lgnd1ki5rw.js": "sha256-+3aW10dcESqzAfOER0UcdTdu68OXI1SC2KMfoKP2bc0=",
+    "./_framework/dotnet.js": "sha256-3perOxn17o/Ooh/Udb5Iin7KkdZdMC2PRqNmxKmN7Zg=",
     "./_framework/dotnet.native.4xbsgn06op.js": "sha256-WHdERxxgCQA79nOtWAOvxQ2f7p1kEx+swJwfE4AE9Nk=",
     "./_framework/dotnet.native.js": "sha256-WHdERxxgCQA79nOtWAOvxQ2f7p1kEx+swJwfE4AE9Nk=",
+    "./_framework/dotnet.qiczqd5tir.js": "sha256-3perOxn17o/Ooh/Udb5Iin7KkdZdMC2PRqNmxKmN7Zg=",
     "./_framework/dotnet.runtime.js": "sha256-YdXsn/a7hb+UMypOFCf8bmv3S6PbDPewiNWqmUM/1dk=",
     "./_framework/dotnet.runtime.zj9dll5ffg.js": "sha256-YdXsn/a7hb+UMypOFCf8bmv3S6PbDPewiNWqmUM/1dk=",
     "./js/pmstools.js": "sha256-csciomYtMR27JfdTBLEedt7HOEWpHS6YM/2pGKaXqYc=",
