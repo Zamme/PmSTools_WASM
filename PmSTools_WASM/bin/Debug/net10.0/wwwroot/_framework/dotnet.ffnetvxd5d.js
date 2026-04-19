@@ -5,7 +5,7 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
   "mainAssemblyName": "PmSTools_WASM",
   "applicationEnvironment": "Development",
   "resources": {
-    "hash": "sha256-NjBev9UC/1GxdeRjobWTn9ydfiSedxx3JAg7nuL59D4=",
+    "hash": "sha256-NPUGARExHTMUei72D2qR+RZbuhXL1pn2cSUVTp+EiyQ=",
     "jsModuleNative": [
       {
         "name": "dotnet.native.4xbsgn06op.js"
@@ -1242,16 +1242,16 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
       },
       {
         "virtualPath": "PmSTools_WASM.wasm",
-        "name": "PmSTools_WASM.9hnwz7hoo9.wasm",
-        "integrity": "sha256-IzILm57ubUvNAXhfhSe7LCvuuuORJppddau98iE6a9A=",
+        "name": "PmSTools_WASM.i4g0v0azi1.wasm",
+        "integrity": "sha256-Xs+1rcKKMuGb7JXWn2tVbQVyRL1D0s0AL8AIg9RMClI=",
         "cache": "force-cache"
       }
     ],
     "pdb": [
       {
         "virtualPath": "PmSTools_WASM.pdb",
-        "name": "PmSTools_WASM.tuow5cq9yt.pdb",
-        "integrity": "sha256-1frEC5fjFBIgMuC44DjPGoRSVwtuiXQxyPDbULm2PAg=",
+        "name": "PmSTools_WASM.ddwfi4xjjy.pdb",
+        "integrity": "sha256-X/zBtzD/1ZGw6ZW9NMxMWKV7Co8kleUoiRUsGhzlVrY=",
         "cache": "force-cache"
       }
     ],

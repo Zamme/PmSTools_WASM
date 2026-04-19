@@ -20,7 +20,16 @@ public sealed class LocalStorageService
 
     public async Task<T?> GetItemAsync<T>(string key)
     {
-        var json = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", key);
+        string? json = null;
+        try
+        {
+            json = await _jsRuntime.InvokeAsync<string>("pmstools.storageGetItem", key);
+        }
+        catch (JSException)
+        {
+            return default;
+        }
+
         if (string.IsNullOrWhiteSpace(json))
         {
             return default;
@@ -29,14 +38,28 @@ public sealed class LocalStorageService
         return JsonSerializer.Deserialize<T>(json, JsonOptions);
     }
 
-    public Task SetItemAsync<T>(string key, T value)
+    public async Task SetItemAsync<T>(string key, T value)
     {
         var json = JsonSerializer.Serialize(value, JsonOptions);
-        return _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, json).AsTask();
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync("pmstools.storageSetItem", key, json);
+        }
+        catch (JSException)
+        {
+            // Storage might be unavailable (iOS private mode or restricted contexts).
+        }
     }
 
-    public Task RemoveItemAsync(string key)
+    public async Task RemoveItemAsync(string key)
     {
-        return _jsRuntime.InvokeVoidAsync("localStorage.removeItem", key).AsTask();
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync("pmstools.storageRemoveItem", key);
+        }
+        catch (JSException)
+        {
+            // Storage might be unavailable (iOS private mode or restricted contexts).
+        }
     }
 }

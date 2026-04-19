@@ -1,4 +1,37 @@
 window.pmstools = {
+  storageAvailable: function () {
+    try {
+      const testKey = "pmstools.storage.test";
+      localStorage.setItem(testKey, "1");
+      localStorage.removeItem(testKey);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  },
+  storageGetItem: function (key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  },
+  storageSetItem: function (key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  },
+  storageRemoveItem: function (key) {
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  },
   startCamera: async function (videoId) {
     const video = document.getElementById(videoId);
     if (!video || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
