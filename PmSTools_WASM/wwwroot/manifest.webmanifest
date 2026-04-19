@@ -1,0 +1,24 @@
+{
+  "name": "PmSTools",
+  "short_name": "PmSTools",
+  "id": "/PmSTools_WASM/",
+  "start_url": "/PmSTools_WASM/",
+  "scope": "/PmSTools_WASM/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#f6f3ee",
+  "theme_color": "#ff8a3d",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
