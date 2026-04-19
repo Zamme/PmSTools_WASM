@@ -24,59 +24,6 @@
     </div>
 </section>
 
-<div class="panel-grid">
-    <div class="panel">
-        <div class="panel-header">
-            <h2>OCR input</h2>
-            <span class="badge">Image or camera</span>
-        </div>
-        <p>Upload a photo if the camera is unavailable. We will run OCR in-browser.</p>
-        <div class="stack">
-            <InputFile OnChange="HandleFileSelected" accept="image/*" />
-            @if (IsBusy)
-            {
-                <div class="loading" aria-live="polite">
-                    <span></span><span></span><span></span>
-                    Reading text...
-                </div>
-            }
-            <textarea class="ocr-preview" placeholder="OCR text will appear here" @bind="OcrText"></textarea>
-            <button class="btn-ghost" @onclick="RebuildFromOcrText" disabled="@IsBusy">Rebuild codes from text</button>
-        </div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-header">
-            <h2>Prefixes</h2>
-            <span class="badge">Filtering</span>
-        </div>
-        <p>Only codes that begin with an enabled prefix are kept.</p>
-        <div class="stack">
-            @if (Prefixes.Count == 0)
-            {
-                <div class="notice">No prefixes yet. Add at least one to enable extraction.</div>
-            }
-            else
-            {
-                @foreach (var prefix in Prefixes)
-                {
-                    <div class="prefix-pill">
-                        <label>
-                            <input type="checkbox" checked="@prefix.IsActive" @onchange="(args) => TogglePrefix(prefix, args)" />
-                            <span class="prefix-value">@prefix.Value</span>
-                        </label>
-                        <button class="btn-ghost" @onclick="() => RemovePrefix(prefix)">Remove</button>
-                    </div>
-                }
-            }
-            <div class="input-row">
-                <input placeholder="Add prefix" @bind="NewPrefix" />
-                <button class="btn-primary" @onclick="AddPrefix">Add</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="panel" style="margin-top: 24px;">
     <div class="panel-header">
         <h2>Last codes</h2>
@@ -129,6 +76,59 @@
             }
         </div>
     }
+</div>
+
+<div class="panel-grid" style="margin-top: 24px;">
+    <div class="panel">
+        <div class="panel-header">
+            <h2>OCR input</h2>
+            <span class="badge">Image or camera</span>
+        </div>
+        <p>Upload a photo if the camera is unavailable. We will run OCR in-browser.</p>
+        <div class="stack">
+            <InputFile OnChange="HandleFileSelected" accept="image/*" />
+            @if (IsBusy)
+            {
+                <div class="loading" aria-live="polite">
+                    <span></span><span></span><span></span>
+                    Reading text...
+                </div>
+            }
+            <textarea class="ocr-preview" placeholder="OCR text will appear here" @bind="OcrText"></textarea>
+            <button class="btn-ghost" @onclick="RebuildFromOcrText" disabled="@IsBusy">Rebuild codes from text</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Prefixes</h2>
+            <span class="badge">Filtering</span>
+        </div>
+        <p>Only codes that begin with an enabled prefix are kept.</p>
+        <div class="stack">
+            @if (Prefixes.Count == 0)
+            {
+                <div class="notice">No prefixes yet. Add at least one to enable extraction.</div>
+            }
+            else
+            {
+                @foreach (var prefix in Prefixes)
+                {
+                    <div class="prefix-pill">
+                        <label>
+                            <input type="checkbox" checked="@prefix.IsActive" @onchange="(args) => TogglePrefix(prefix, args)" />
+                            <span class="prefix-value">@prefix.Value</span>
+                        </label>
+                        <button class="btn-ghost" @onclick="() => RemovePrefix(prefix)">Remove</button>
+                    </div>
+                }
+            }
+            <div class="input-row">
+                <input placeholder="Add prefix" @bind="NewPrefix" />
+                <button class="btn-primary" @onclick="AddPrefix">Add</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="panel" style="margin-top: 24px;">

@@ -26,6 +26,7 @@ body {
     font-family: "Space Grotesk", "Segoe UI", sans-serif;
     color: var(--ink);
     background: radial-gradient(circle at top left, #fff1e2 0%, #f6f3ee 45%, #e6eff0 100%);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 h1, h2, h3 {
@@ -51,7 +52,7 @@ button, input, textarea {
 }
 
 .app-header {
-    padding: 20px 28px;
+    padding: calc(20px + env(safe-area-inset-top)) calc(28px + env(safe-area-inset-right)) 20px calc(28px + env(safe-area-inset-left));
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -70,11 +71,11 @@ button, input, textarea {
 }
 
 .brand-title {
-    font-size: 1.4rem;
+    font-size: 1.15rem;
 }
 
 .brand-subtitle {
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     color: var(--ink-soft);
 }
 
@@ -84,12 +85,13 @@ button, input, textarea {
 }
 
 .app-nav a {
-    padding: 8px 14px;
+    padding: 6px 12px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.8);
     border: 1px solid transparent;
     color: var(--ink-soft);
     font-weight: 600;
+    font-size: 0.9rem;
     transition: 0.2s ease;
 }
 
@@ -102,7 +104,7 @@ button, input, textarea {
 .app-main {
     width: min(1200px, 100%);
     margin: 0 auto;
-    padding: 32px 20px 64px;
+    padding: 32px calc(20px + env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
     flex: 1;
 }
 
@@ -317,10 +319,12 @@ button, input, textarea {
     justify-content: space-between;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .code-id {
     font-weight: 600;
+    word-break: break-all;
 }
 
 .code-actions {
@@ -406,11 +410,35 @@ button, input, textarea {
         flex-wrap: wrap;
     }
 
+    .brand-title {
+        font-size: 1.05rem;
+    }
+
+    .brand-subtitle {
+        font-size: 0.7rem;
+    }
+
+    .app-nav a {
+        padding: 6px 10px;
+        font-size: 0.85rem;
+    }
+
+    .app-main {
+        padding: 20px calc(16px + env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    }
+
     .hero {
-        padding: 22px;
+        padding: 16px;
+        grid-template-columns: 1fr;
     }
 
     .camera-box video {
-        height: 200px;
+        height: auto;
+        max-height: 38vh;
+        aspect-ratio: 4 / 3;
+    }
+
+    .camera-box {
+        padding: 8px;
     }
 }
