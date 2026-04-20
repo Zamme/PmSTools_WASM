@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PmSTools_WASM")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+66bc8e1e4ec6b146ada48a037f9c43d76d1a522d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ef031593c09420eb2ea4c2a11ab7ef25ff7aba5b")]
 [assembly: System.Reflection.AssemblyProductAttribute("PmSTools_WASM")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PmSTools_WASM")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

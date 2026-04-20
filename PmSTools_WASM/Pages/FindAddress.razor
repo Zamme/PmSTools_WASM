@@ -1,0 +1,411 @@
+@page "/find-address"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject AddressParser Parser
+@inject GeocodingService Geocoder
+@inject PlaceStorage Storage
+
+<section class="hero">
+    <div>
+        <h1>Find Address</h1>
+        <p>Scan or upload an address label, review the parsed fields, and open it on a map.</p>
+        <div class="hero-cta">
+            <button class="btn-primary" @onclick="StartCameraAsync" disabled="@IsBusy">Start camera</button>
+            <button class="btn-secondary" @onclick="CaptureFromCameraAsync" disabled="@(!IsCameraOn || IsBusy)">Capture and read</button>
+            <button class="btn-ghost" @onclick="StopCameraAsync" disabled="@(!IsCameraOn)">Stop camera</button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="notice" style="margin-top: 12px;">@StatusMessage</div>
+        }
+    </div>
+    <div class="camera-box">
+        <video id="addressCamera" playsinline muted></video>
+        <div class="camera-status">@CameraStatus</div>
+    </div>
+</section>
+
+<div class="panel-grid" style="margin-top: 24px;">
+    <div class="panel">
+        <div class="panel-header">
+            <h2>OCR input</h2>
+            <span class="badge">Camera or file</span>
+        </div>
+        <p>Upload a photo if the camera is unavailable. We will run OCR in-browser.</p>
+        <div class="stack">
+            <InputFile OnChange="HandleFileSelected" accept="image/*" />
+            @if (IsBusy)
+            {
+                <div class="loading" aria-live="polite">
+                    <span></span><span></span><span></span>
+                    Reading text...
+                </div>
+            }
+            <textarea class="ocr-preview" placeholder="OCR text will appear here" @bind="OcrText"></textarea>
+            <button class="btn-ghost" @onclick="ParseFromOcrAsync" disabled="@IsBusy">Parse address from text</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Parsed address</h2>
+            <span class="badge">Editable</span>
+        </div>
+        <p>Adjust the fields before searching. Searches use OpenStreetMap Nominatim.</p>
+        <div class="address-grid">
+            <label>
+                <span>Name</span>
+                <input @bind="CurrentPlace.Name" @onblur="PersistCurrentPlaceAsync" />
+            </label>
+            <label>
+                <span>Street name</span>
+                <input @bind="CurrentPlace.StreetName" @onblur="PersistCurrentPlaceAsync" />
+            </label>
+            <label>
+                <span>Street number</span>
+                <input @bind="CurrentPlace.StreetNumber" @onblur="PersistCurrentPlaceAsync" />
+            </label>
+            <label>
+                <span>Postal code</span>
+                <input @bind="CurrentPlace.PostalCode" @onblur="PersistCurrentPlaceAsync" />
+            </label>
+            <label>
+                <span>City</span>
+                <input @bind="CurrentPlace.City" @onblur="PersistCurrentPlaceAsync" />
+            </label>
+            <label>
+                <span>Country</span>
+                <input @bind="CurrentPlace.Country" @onblur="PersistCurrentPlaceAsync" />
+            </label>
+        </div>
+        <div class="hero-cta" style="margin-top: 14px;">
+            <button class="btn-primary" @onclick="SearchAsync" disabled="@IsBusy">Search address</button>
+            <button class="btn-ghost" @onclick="SaveCurrentPlaceAsync" disabled="@IsBusy">Save to history</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel-grid" style="margin-top: 24px;">
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Map candidates</h2>
+            <span class="badge">@Candidates.Count found</span>
+        </div>
+        <p>Select a candidate to preview it on the map and save it.</p>
+
+        @if (Candidates.Count == 0)
+        {
+            <div class="notice">No candidates yet. Run a search to fetch map results.</div>
+        }
+        else
+        {
+            <div class="candidate-list">
+                @foreach (var candidate in Candidates)
+                {
+                    var isActive = SelectedCandidate == candidate;
+                    <div class="candidate-card @(isActive ? "active" : string.Empty)">
+                        <div>
+                            <div class="candidate-title">@candidate.BuildShortLabel()</div>
+                            <div class="muted">@candidate.DisplayName</div>
+                        </div>
+                        <div class="code-actions">
+                            <button class="btn-ghost" @onclick="() => SelectCandidate(candidate)">Preview</button>
+                            <a class="btn-secondary" href="@BuildMapLink(candidate)" target="_blank" rel="noopener">Open map</a>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Map preview</h2>
+            <span class="badge">OpenStreetMap</span>
+        </div>
+        <p>Preview the selected candidate on a static map.</p>
+
+        @if (SelectedCandidate == null)
+        {
+            <div class="notice">Select a candidate to show the preview map.</div>
+        }
+        else
+        {
+            <div class="map-preview">
+                <iframe title="Map preview" src="@BuildMapEmbed(SelectedCandidate)" loading="lazy"></iframe>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="panel" style="margin-top: 24px;">
+    <div class="panel-header">
+        <h2>Recent searches</h2>
+        <span class="badge">@RecentPlaces.Count</span>
+    </div>
+    <p>Quickly reuse recent addresses without scanning again.</p>
+
+    @if (RecentPlaces.Count == 0)
+    {
+        <div class="notice">No saved places yet.</div>
+    }
+    else
+    {
+        <div class="candidate-list">
+            @foreach (var place in RecentPlaces)
+            {
+                <div class="candidate-card">
+                    <div>
+                        <div class="candidate-title">@place.BuildDisplayName()</div>
+                    </div>
+                    <div class="code-actions">
+                        <button class="btn-ghost" @onclick="() => LoadPlace(place)">Use</button>
+                        <button class="btn-ghost" @onclick="() => RemoveRecentPlace(place)">Remove</button>
+                    </div>
+                </div>
+            }
+        </div>
+        <div style="margin-top: 12px;">
+            <button class="btn-ghost" @onclick="ClearRecentPlaces">Clear history</button>
+        </div>
+    }
+</div>
+
+@code {
+    private PlaceInfoItem CurrentPlace { get; set; } = new();
+    private List<GeocodeCandidate> Candidates { get; set; } = new();
+    private GeocodeCandidate? SelectedCandidate { get; set; }
+    private List<PlaceInfoItem> RecentPlaces { get; set; } = new();
+    private string? OcrText { get; set; }
+    private string? StatusMessage { get; set; }
+    private bool IsBusy { get; set; }
+    private bool IsCameraOn { get; set; }
+
+    private string CameraStatus => IsCameraOn ? "Camera live" : "Camera off";
+
+    protected override async Task OnInitializedAsync()
+    {
+        RecentPlaces = await Storage.GetRecentPlacesAsync();
+        var lastPlace = await Storage.GetLastPlaceAsync();
+        if (lastPlace != null)
+        {
+            CurrentPlace = lastPlace;
+        }
+    }
+
+    private async Task StartCameraAsync()
+    {
+        StatusMessage = null;
+        IsBusy = true;
+        try
+        {
+            var started = await JS.InvokeAsync<bool>("pmstools.startCamera", "addressCamera");
+            IsCameraOn = started;
+            StatusMessage = started ? "Camera ready. Aim at the label." : "Camera not available in this browser.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Camera error: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task StopCameraAsync()
+    {
+        await JS.InvokeVoidAsync("pmstools.stopCamera", "addressCamera");
+        IsCameraOn = false;
+        StatusMessage = "Camera stopped.";
+    }
+
+    private async Task CaptureFromCameraAsync()
+    {
+        if (!IsCameraOn)
+        {
+            StatusMessage = "Start the camera first.";
+            return;
+        }
+
+        await RunOcrAsync(async () =>
+        {
+            var dataUrl = await JS.InvokeAsync<string?>("pmstools.captureFrameDataUrl", "addressCamera");
+            if (string.IsNullOrWhiteSpace(dataUrl))
+            {
+                throw new InvalidOperationException("Unable to capture frame.");
+            }
+
+            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl);
+        });
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (file == null)
+        {
+            return;
+        }
+
+        await RunOcrAsync(async () =>
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 6 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var bytes = memoryStream.ToArray();
+            var base64 = Convert.ToBase64String(bytes);
+            var dataUrl = $"data:{file.ContentType};base64,{base64}";
+            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl);
+        });
+    }
+
+    private async Task RunOcrAsync(Func<Task<string>> ocrOperation)
+    {
+        IsBusy = true;
+        StatusMessage = "Reading text...";
+
+        try
+        {
+            var text = await ocrOperation();
+            OcrText = text;
+            await ParseFromOcrAsync();
+            StatusMessage = "OCR completed.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"OCR failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task ParseFromOcrAsync()
+    {
+        CurrentPlace = Parser.Parse(OcrText);
+        if (string.IsNullOrWhiteSpace(CurrentPlace.Country))
+        {
+            CurrentPlace.Country = "Spain";
+        }
+
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        IsBusy = true;
+        StatusMessage = "Searching map...";
+
+        try
+        {
+            Candidates = await Geocoder.SearchAsync(CurrentPlace);
+            SelectedCandidate = Candidates.FirstOrDefault();
+            if (SelectedCandidate != null)
+            {
+                ApplyCandidate(SelectedCandidate);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Search failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void SelectCandidate(GeocodeCandidate candidate)
+    {
+        SelectedCandidate = candidate;
+        ApplyCandidate(candidate);
+    }
+
+    private void ApplyCandidate(GeocodeCandidate candidate)
+    {
+        CurrentPlace.StreetName = candidate.StreetName ?? CurrentPlace.StreetName;
+        CurrentPlace.StreetNumber = candidate.StreetNumber ?? CurrentPlace.StreetNumber;
+        CurrentPlace.PostalCode = candidate.PostalCode ?? CurrentPlace.PostalCode;
+        CurrentPlace.City = candidate.City ?? CurrentPlace.City;
+        CurrentPlace.Country = candidate.Country ?? CurrentPlace.Country;
+        CurrentPlace.Latitude = candidate.Latitude;
+        CurrentPlace.Longitude = candidate.Longitude;
+    }
+
+    private async Task SaveCurrentPlaceAsync()
+    {
+        await PersistCurrentPlaceAsync();
+        StatusMessage = "Saved to history.";
+    }
+
+    private async Task PersistCurrentPlaceAsync()
+    {
+        if (!HasPlaceData(CurrentPlace))
+        {
+            return;
+        }
+
+        await Storage.SaveLastPlaceAsync(CurrentPlace);
+        RecentPlaces = await Storage.GetRecentPlacesAsync();
+    }
+
+    private async Task LoadPlace(PlaceInfoItem place)
+    {
+        CurrentPlace = place;
+        Candidates = new List<GeocodeCandidate>();
+        SelectedCandidate = null;
+        await PersistCurrentPlaceAsync();
+    }
+
+    private async Task RemoveRecentPlace(PlaceInfoItem place)
+    {
+        await Storage.RemoveRecentPlaceAsync(place);
+        RecentPlaces = await Storage.GetRecentPlacesAsync();
+    }
+
+    private async Task ClearRecentPlaces()
+    {
+        await Storage.ClearRecentPlacesAsync();
+        RecentPlaces = new List<PlaceInfoItem>();
+    }
+
+    private static string BuildMapEmbed(GeocodeCandidate candidate)
+    {
+        var lat = candidate.Latitude;
+        var lon = candidate.Longitude;
+        var latDelta = 0.006;
+        var lonDelta = 0.01;
+        var left = (lon - lonDelta).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var right = (lon + lonDelta).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var bottom = (lat - latDelta).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var top = (lat + latDelta).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var marker = $"{lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        return $"https://www.openstreetmap.org/export/embed.html?bbox={left}%2C{bottom}%2C{right}%2C{top}&layer=mapnik&marker={marker}";
+    }
+
+    private static string BuildMapLink(GeocodeCandidate candidate)
+    {
+        var lat = candidate.Latitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var lon = candidate.Longitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return $"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=18/{lat}/{lon}";
+    }
+
+    private static bool HasPlaceData(PlaceInfoItem place)
+    {
+        return !(string.IsNullOrWhiteSpace(place.Name)
+            && string.IsNullOrWhiteSpace(place.StreetName)
+            && string.IsNullOrWhiteSpace(place.StreetNumber)
+            && string.IsNullOrWhiteSpace(place.PostalCode)
+            && string.IsNullOrWhiteSpace(place.City));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (IsCameraOn)
+        {
+            await JS.InvokeVoidAsync("pmstools.stopCamera", "addressCamera");
+        }
+    }
+}

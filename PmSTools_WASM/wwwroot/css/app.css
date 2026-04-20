@@ -402,6 +402,76 @@ button, input, textarea {
     color: #0b4f4f;
 }
 
+.address-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.address-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+}
+
+.address-grid input {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #fff;
+}
+
+.candidate-list,
+.route-list,
+.stop-list {
+    display: grid;
+    gap: 12px;
+}
+
+.candidate-card,
+.route-card,
+.stop-card {
+    background: #fff;
+    border: 1px solid rgba(215, 207, 196, 0.7);
+    border-radius: 16px;
+    padding: 14px;
+    display: grid;
+    gap: 12px;
+}
+
+.candidate-card.active,
+.route-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 10px 18px rgba(255, 138, 61, 0.18);
+}
+
+.candidate-title {
+    font-weight: 600;
+}
+
+.map-preview iframe {
+    width: 100%;
+    min-height: 260px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.route-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.stop-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
 .notice {
     padding: 10px 12px;
     border-radius: 12px;

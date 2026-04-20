@@ -31,6 +31,19 @@
       "problemMatcher": [
         "$msCompile"
       ]
+    },
+    {
+      "label": "run (no watch)",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/PmSTools_WASM/PmSTools_WASM.csproj"
+      ],
+      "problemMatcher": [
+        "$msCompile"
+      ]
     }
   ]
 }

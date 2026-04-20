@@ -1,0 +1,536 @@
+@page "/create-route"
+@inject PlaceStorage Storage
+@inject GeocodingService Geocoder
+@inject IJSRuntime JS
+
+<section class="hero">
+    <div>
+        <h1>Create Route</h1>
+        <p>Build and maintain delivery routes with saved addresses or manual stops.</p>
+        <div class="hero-cta">
+            <button class="btn-primary" @onclick="CreateNewRoute">New route</button>
+            <button class="btn-ghost" @onclick="SaveRoutesAsync" disabled="@IsBusy">Save changes</button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="notice" style="margin-top: 12px;">@StatusMessage</div>
+        }
+    </div>
+    <div>
+        <div class="panel">
+            <h2>Route summary</h2>
+            <p>Active route: @ActiveRouteName</p>
+            <div class="stack">
+                <div class="prefix-pill">
+                    <span class="prefix-value">Stops</span>
+                    <span class="badge">@ActiveStopsCount</span>
+                </div>
+                <div class="prefix-pill">
+                    <span class="prefix-value">Distance estimate</span>
+                    <span class="badge">@DistanceLabel</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="panel-grid" style="margin-top: 24px;">
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Routes</h2>
+            <span class="badge">@Routes.Count</span>
+        </div>
+        <p>Select a route to edit or create a new one.</p>
+
+        @if (Routes.Count == 0)
+        {
+            <div class="notice">No routes yet. Create your first route.</div>
+        }
+        else
+        {
+            <div class="route-list">
+                @foreach (var routeItem in RouteItems)
+                {
+                    var isActive = ActiveRoute == routeItem.Route;
+                    <div class="route-card @(isActive ? "active" : string.Empty)">
+                        <div>
+                            <div class="candidate-title">@routeItem.DisplayName</div>
+                            <div class="muted">@routeItem.Route.Stops.Count stop(s)</div>
+                        </div>
+                        <div class="code-actions">
+                            <button class="btn-ghost" @onclick="() => SelectRoute(routeItem.Route)">Edit</button>
+                            <button class="btn-ghost" @onclick="() => MoveRoute(routeItem.Route, -1)" disabled="@(!routeItem.CanMoveUp)">Up</button>
+                            <button class="btn-ghost" @onclick="() => MoveRoute(routeItem.Route, 1)" disabled="@(!routeItem.CanMoveDown)">Down</button>
+                            <button class="btn-ghost" @onclick="() => DeleteRoute(routeItem.Route)">Delete</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h2>Route editor</h2>
+            <span class="badge">@ActiveStopsCount</span>
+        </div>
+        <p>Manage stops, geocode locations, and open the route in your map app.</p>
+
+        @if (ActiveRoute == null)
+        {
+            <div class="notice">Select a route to edit.</div>
+        }
+        else
+        {
+            <div class="stack">
+                <label>
+                    <span>Route name</span>
+                    <input @bind="ActiveRoute.Name" @onblur="SaveRoutesAsync" />
+                </label>
+
+                <div class="route-actions">
+                    <button class="btn-secondary" @onclick="GeocodeMissingStopsAsync" disabled="@IsBusy">Geocode missing stops</button>
+                    @if (!string.IsNullOrWhiteSpace(MapsUrl))
+                    {
+                        <a class="btn-ghost" href="@MapsUrl" target="_blank" rel="noopener">Open in maps</a>
+                    }
+                </div>
+
+                @if (ActiveRoute.Stops.Count == 0)
+                {
+                    <div class="notice">No stops yet. Add one below.</div>
+                }
+                else
+                {
+                    <div class="stop-list">
+                        @foreach (var stop in ActiveRoute.Stops)
+                        {
+                            <div class="stop-card">
+                                <div class="stop-header">
+                                    <div>
+                                        <div class="candidate-title">Stop @stop.Order</div>
+                                        <div class="muted">@stop.BuildAddressLine()</div>
+                                    </div>
+                                    <div class="code-actions">
+                                        <button class="btn-ghost" @onclick="() => MoveStop(stop, -1)" disabled="@stop.IsFirst">Up</button>
+                                        <button class="btn-ghost" @onclick="() => MoveStop(stop, 1)" disabled="@stop.IsLast">Down</button>
+                                        <button class="btn-ghost" @onclick="() => RemoveStop(stop)">Remove</button>
+                                    </div>
+                                </div>
+                                <div class="address-grid">
+                                    <label>
+                                        <span>Name</span>
+                                        <input @bind="stop.Name" @onblur="() => OnStopEdited(stop)" />
+                                    </label>
+                                    <label>
+                                        <span>Street name</span>
+                                        <input @bind="stop.StreetName" @onblur="() => OnStopEdited(stop)" />
+                                    </label>
+                                    <label>
+                                        <span>Street number</span>
+                                        <input @bind="stop.StreetNumber" @onblur="() => OnStopEdited(stop)" />
+                                    </label>
+                                    <label>
+                                        <span>Postal code</span>
+                                        <input @bind="stop.PostalCode" @onblur="() => OnStopEdited(stop)" />
+                                    </label>
+                                    <label>
+                                        <span>City</span>
+                                        <input @bind="stop.City" @onblur="() => OnStopEdited(stop)" />
+                                    </label>
+                                    <label>
+                                        <span>Country</span>
+                                        <input @bind="stop.Country" @onblur="() => OnStopEdited(stop)" />
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="panel" style="margin-top: 12px;">
+                    <div class="panel-header">
+                        <h3>Add new stop</h3>
+                        <span class="badge">Manual</span>
+                    </div>
+                    <div class="address-grid">
+                        <label>
+                            <span>Name</span>
+                            <input @bind="NewStop.Name" />
+                        </label>
+                        <label>
+                            <span>Street name</span>
+                            <input @bind="NewStop.StreetName" />
+                        </label>
+                        <label>
+                            <span>Street number</span>
+                            <input @bind="NewStop.StreetNumber" />
+                        </label>
+                        <label>
+                            <span>Postal code</span>
+                            <input @bind="NewStop.PostalCode" />
+                        </label>
+                        <label>
+                            <span>City</span>
+                            <input @bind="NewStop.City" />
+                        </label>
+                        <label>
+                            <span>Country</span>
+                            <input @bind="NewStop.Country" />
+                        </label>
+                    </div>
+                    <div class="hero-cta" style="margin-top: 12px;">
+                        <button class="btn-primary" @onclick="AddManualStop">Add stop</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="panel" style="margin-top: 24px;">
+    <div class="panel-header">
+        <h2>Saved places</h2>
+        <span class="badge">@RecentPlaces.Count</span>
+    </div>
+    <p>Use recent addresses from the Find Address section to speed up route creation.</p>
+
+    @if (RecentPlaces.Count == 0)
+    {
+        <div class="notice">No saved places available.</div>
+    }
+    else
+    {
+        <div class="candidate-list">
+            @foreach (var place in RecentPlaces)
+            {
+                <div class="candidate-card">
+                    <div>
+                        <div class="candidate-title">@place.BuildDisplayName()</div>
+                    </div>
+                    <div class="code-actions">
+                        <button class="btn-ghost" @onclick="() => AddStopFromPlace(place)">Add stop</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<DeliveryRoute> Routes { get; set; } = new();
+    private DeliveryRoute? ActiveRoute { get; set; }
+    private DeliveryRouteStop NewStop { get; set; } = new();
+    private List<PlaceInfoItem> RecentPlaces { get; set; } = new();
+    private string? StatusMessage { get; set; }
+    private bool IsBusy { get; set; }
+
+    private string ActiveRouteName => ActiveRoute == null
+        ? "None"
+        : string.IsNullOrWhiteSpace(ActiveRoute.Name) ? "Route" : ActiveRoute.Name.Trim();
+
+    private int ActiveStopsCount => ActiveRoute?.Stops.Count ?? 0;
+
+    private double? ActiveDistance => ActiveRoute == null ? null : ComputeRouteDistanceKm(ActiveRoute);
+
+    private string DistanceLabel => ActiveRoute == null
+        ? "-"
+        : ActiveDistance.HasValue
+            ? $"{ActiveDistance:0.0} km"
+            : "Not geocoded";
+
+    private string? MapsUrl => ActiveRoute == null ? null : BuildMapsUrl(ActiveRoute);
+
+    private List<RouteItem> RouteItems => Routes
+        .Select((route, index) => new RouteItem
+        {
+            Route = route,
+            DisplayName = BuildRouteDisplayName(route, index + 1),
+            CanMoveUp = index > 0,
+            CanMoveDown = index < Routes.Count - 1
+        })
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Routes = await Storage.GetRoutesAsync();
+        foreach (var route in Routes)
+        {
+            route.RenumberStops();
+        }
+
+        ActiveRoute = Routes.FirstOrDefault();
+        RecentPlaces = await Storage.GetRecentPlacesAsync();
+    }
+
+    private async Task CreateNewRoute()
+    {
+        var route = new DeliveryRoute();
+        Routes.Add(route);
+        ActiveRoute = route;
+        await SaveRoutesAsync();
+    }
+
+    private void SelectRoute(DeliveryRoute route)
+    {
+        ActiveRoute = route;
+    }
+
+    private async Task DeleteRoute(DeliveryRoute route)
+    {
+        Routes.Remove(route);
+        if (ActiveRoute == route)
+        {
+            ActiveRoute = Routes.FirstOrDefault();
+        }
+
+        await SaveRoutesAsync();
+    }
+
+    private async Task MoveRoute(DeliveryRoute route, int delta)
+    {
+        var index = Routes.IndexOf(route);
+        var target = index + delta;
+        if (index < 0 || target < 0 || target >= Routes.Count)
+        {
+            return;
+        }
+
+        Routes.RemoveAt(index);
+        Routes.Insert(target, route);
+        await SaveRoutesAsync();
+    }
+
+    private async Task AddManualStop()
+    {
+        if (ActiveRoute == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(NewStop.StreetName) &&
+            string.IsNullOrWhiteSpace(NewStop.City) &&
+            string.IsNullOrWhiteSpace(NewStop.Name))
+        {
+            return;
+        }
+
+        ActiveRoute.AddStop(new DeliveryRouteStop
+        {
+            Name = NewStop.Name,
+            StreetName = NewStop.StreetName,
+            StreetNumber = NewStop.StreetNumber,
+            PostalCode = NewStop.PostalCode,
+            City = NewStop.City,
+            Country = NewStop.Country
+        });
+
+        NewStop = new DeliveryRouteStop();
+        await SaveRoutesAsync();
+    }
+
+    private async Task AddStopFromPlace(PlaceInfoItem place)
+    {
+        if (ActiveRoute == null)
+        {
+            return;
+        }
+
+        place.EnsureStreetParts();
+        ActiveRoute.AddStop(place);
+        await SaveRoutesAsync();
+    }
+
+    private async Task RemoveStop(DeliveryRouteStop stop)
+    {
+        if (ActiveRoute == null)
+        {
+            return;
+        }
+
+        ActiveRoute.RemoveStop(stop);
+        await SaveRoutesAsync();
+    }
+
+    private async Task MoveStop(DeliveryRouteStop stop, int delta)
+    {
+        if (ActiveRoute == null)
+        {
+            return;
+        }
+
+        var index = ActiveRoute.Stops.IndexOf(stop);
+        var target = index + delta;
+        if (index < 0 || target < 0 || target >= ActiveRoute.Stops.Count)
+        {
+            return;
+        }
+
+        ActiveRoute.Stops.RemoveAt(index);
+        ActiveRoute.Stops.Insert(target, stop);
+        ActiveRoute.RenumberStops();
+        await SaveRoutesAsync();
+    }
+
+    private async Task OnStopEdited(DeliveryRouteStop stop)
+    {
+        if (ActiveRoute == null)
+        {
+            return;
+        }
+
+        stop.ClearCoordinates();
+
+        await SaveRoutesAsync();
+    }
+
+    private async Task GeocodeMissingStopsAsync()
+    {
+        if (ActiveRoute == null)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = "Geocoding stops...";
+
+        try
+        {
+            foreach (var stop in ActiveRoute.Stops)
+            {
+                if (stop.Latitude.HasValue && stop.Longitude.HasValue)
+                {
+                    continue;
+                }
+
+                var candidate = await Geocoder.GeocodeStopAsync(stop);
+                if (candidate != null)
+                {
+                    stop.Latitude = candidate.Latitude;
+                    stop.Longitude = candidate.Longitude;
+                    stop.StreetName ??= candidate.StreetName;
+                    stop.StreetNumber ??= candidate.StreetNumber;
+                    stop.PostalCode ??= candidate.PostalCode;
+                    stop.City ??= candidate.City;
+                    stop.Country ??= candidate.Country;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Geocoding failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            SaveRoutesAsync();
+        }
+    }
+
+    private async Task SaveRoutesAsync()
+    {
+        foreach (var route in Routes)
+        {
+            route.RenumberStops();
+        }
+
+        await Storage.SaveRoutesAsync(Routes);
+        StatusMessage = "Routes saved.";
+    }
+
+    private static string BuildRouteDisplayName(DeliveryRoute route, int number)
+    {
+        if (route == null || string.IsNullOrWhiteSpace(route.Name))
+        {
+            return $"Route {number}";
+        }
+
+        return $"Route {number} - {route.Name.Trim()}";
+    }
+
+    private static string? BuildMapsUrl(DeliveryRoute route)
+    {
+        if (route.Stops.Count < 2)
+        {
+            return null;
+        }
+
+        var stops = route.Stops
+            .Select(stop => stop.BuildAddressLine())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToList();
+
+        if (stops.Count < 2)
+        {
+            return null;
+        }
+
+        var origin = Uri.EscapeDataString(stops.First());
+        var destination = Uri.EscapeDataString(stops.Last());
+        var waypointList = stops.Skip(1).SkipLast(1).Select(Uri.EscapeDataString).ToList();
+        var waypoints = waypointList.Count > 0 ? string.Join("|", waypointList) : string.Empty;
+
+        var url = $"https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}";
+        if (!string.IsNullOrWhiteSpace(waypoints))
+        {
+            url += $"&waypoints={waypoints}";
+        }
+
+        return url;
+    }
+
+    private static double? ComputeRouteDistanceKm(DeliveryRoute route)
+    {
+        if (route.Stops.Count < 2)
+        {
+            return null;
+        }
+
+        var coords = route.Stops
+            .Select(stop => (stop.Latitude, stop.Longitude))
+            .ToList();
+
+        if (coords.Any(coord => !coord.Latitude.HasValue || !coord.Longitude.HasValue))
+        {
+            return null;
+        }
+
+        double total = 0;
+        for (var i = 1; i < coords.Count; i++)
+        {
+            total += ComputeDistanceKm(
+                coords[i - 1].Latitude!.Value,
+                coords[i - 1].Longitude!.Value,
+                coords[i].Latitude!.Value,
+                coords[i].Longitude!.Value);
+        }
+
+        return total;
+    }
+
+    private static double ComputeDistanceKm(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double radiusKm = 6371.0;
+        var dLat = ToRadians(lat2 - lat1);
+        var dLon = ToRadians(lon2 - lon1);
+
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        var c = 2 * Math.Asin(Math.Min(1, Math.Sqrt(a)));
+        return radiusKm * c;
+    }
+
+    private static double ToRadians(double degrees)
+    {
+        return degrees * (Math.PI / 180.0);
+    }
+
+    private sealed class RouteItem
+    {
+        public DeliveryRoute Route { get; set; } = null!;
+        public string DisplayName { get; set; } = string.Empty;
+        public bool CanMoveUp { get; set; }
+        public bool CanMoveDown { get; set; }
+    }
+}

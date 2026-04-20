@@ -40,6 +40,14 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ291bnRlci5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
+[/mnt/e6bd685b-f931-4b61-8806-5cb11171222b/Github/PmSTools_WASM/PmSTools_WASM/Pages/CreateRoute.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ3JlYXRlUm91dGUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/mnt/e6bd685b-f931-4b61-8806-5cb11171222b/Github/PmSTools_WASM/PmSTools_WASM/Pages/FindAddress.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvRmluZEFkZHJlc3MucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [/mnt/e6bd685b-f931-4b61-8806-5cb11171222b/Github/PmSTools_WASM/PmSTools_WASM/Pages/Home.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXMvSG9tZS5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 

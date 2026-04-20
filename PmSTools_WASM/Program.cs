@@ -11,5 +11,8 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 builder.Services.AddScoped<LocalStorageService>();
 builder.Services.AddScoped<BarcodeStorage>();
 builder.Services.AddScoped<BarcodeParser>();
+builder.Services.AddScoped<AddressParser>();
+builder.Services.AddScoped<GeocodingService>();
+builder.Services.AddScoped<PlaceStorage>();
 
 await builder.Build().RunAsync();

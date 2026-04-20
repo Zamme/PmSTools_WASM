@@ -28,7 +28,7 @@ window.pmstools = {
     }
 
     return async function () {
-      if (window.Tesseract && window.Tesseract.recognize) {
+      if (window.Tesseract && (window.Tesseract.recognize || window.Tesseract.createWorker)) {
         configureTesseractPaths();
         return true;
       }
@@ -57,7 +57,7 @@ window.pmstools = {
       }
 
       const loaded = await loadPromise;
-      return !!loaded && !!(window.Tesseract && window.Tesseract.recognize);
+      return !!loaded && !!(window.Tesseract && (window.Tesseract.recognize || window.Tesseract.createWorker));
     };
   })(),
   storageAvailable: function () {
@@ -148,9 +148,45 @@ window.pmstools = {
       throw new Error("Tesseract not available in this browser");
     }
 
-    const result = await window.Tesseract.recognize(dataUrl, "eng");
-    return (result && result.data && result.data.text) ? result.data.text : "";
+    if (window.Tesseract && window.Tesseract.recognize) {
+      const result = await window.Tesseract.recognize(dataUrl, "eng");
+      return (result && result.data && result.data.text) ? result.data.text : "";
+    }
+
+    if (window.Tesseract && window.Tesseract.createWorker) {
+      const worker = await window.pmstools.loadTesseractWorker();
+      if (!worker) {
+        throw new Error("Tesseract worker failed to initialize");
+      }
+
+      const result = await worker.recognize(dataUrl);
+      return (result && result.data && result.data.text) ? result.data.text : "";
+    }
+
+    throw new Error("Tesseract not available in this browser");
   },
+  loadTesseractWorker: (async function () {
+    let workerPromise = null;
+
+    return async function () {
+      if (!window.Tesseract || !window.Tesseract.createWorker) {
+        return null;
+      }
+
+      if (!workerPromise) {
+        workerPromise = (async () => {
+          const worker = await window.Tesseract.createWorker({
+            logger: () => {}
+          });
+          await worker.loadLanguage("eng");
+          await worker.initialize("eng");
+          return worker;
+        })();
+      }
+
+      return workerPromise;
+    };
+  })(),
   renderBarcode: function (svgId, value) {
     const svg = document.getElementById(svgId);
     if (!svg || !value) {
