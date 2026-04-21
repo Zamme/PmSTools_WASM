@@ -95,50 +95,68 @@
     <div class="panel">
         <div class="panel-header">
             <h2>OCR input</h2>
-            <span class="badge">Image or camera</span>
+            <div class="panel-header-actions">
+                <span class="badge">Image or camera</span>
+                <button class="btn-ghost panel-toggle" @onclick="() => ShowOcrPanel = !ShowOcrPanel" aria-expanded="@ShowOcrPanel" aria-controls="ocr-panel-body" title="Toggle OCR input">
+                    <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M6.7 9.2 12 14.5l5.3-5.3 1.4 1.4-6.7 6.7-6.7-6.7z" />
+                    </svg>
+                </button>
+            </div>
         </div>
-        <p>Upload a photo if the camera is unavailable. We will run OCR in-browser.</p>
-        <div class="stack">
-            <InputFile OnChange="HandleFileSelected" accept="image/*" />
-            @if (IsBusy)
-            {
-                <div class="loading" aria-live="polite">
-                    <span></span><span></span><span></span>
-                    Reading text...
-                </div>
-            }
-            <textarea class="ocr-preview" placeholder="OCR text will appear here" @bind="OcrText"></textarea>
-            <button class="btn-ghost" @onclick="RebuildFromOcrText" disabled="@IsBusy">Rebuild codes from text</button>
+        <div class="panel-body" id="ocr-panel-body" hidden="@(!ShowOcrPanel)">
+            <p>Upload a photo if the camera is unavailable. We will run OCR in-browser.</p>
+            <div class="stack">
+                <InputFile OnChange="HandleFileSelected" accept="image/*" />
+                @if (IsBusy)
+                {
+                    <div class="loading" aria-live="polite">
+                        <span></span><span></span><span></span>
+                        Reading text...
+                    </div>
+                }
+                <textarea class="ocr-preview" placeholder="OCR text will appear here" @bind="OcrText"></textarea>
+                <button class="btn-ghost" @onclick="RebuildFromOcrText" disabled="@IsBusy">Rebuild codes from text</button>
+            </div>
         </div>
     </div>
 
     <div class="panel">
         <div class="panel-header">
             <h2>Prefixes</h2>
-            <span class="badge">Filtering</span>
+            <div class="panel-header-actions">
+                <span class="badge">Filtering</span>
+                <button class="btn-ghost panel-toggle" @onclick="() => ShowPrefixesPanel = !ShowPrefixesPanel" aria-expanded="@ShowPrefixesPanel" aria-controls="prefixes-panel-body" title="Toggle prefixes">
+                    <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M6.7 9.2 12 14.5l5.3-5.3 1.4 1.4-6.7 6.7-6.7-6.7z" />
+                    </svg>
+                </button>
+            </div>
         </div>
-        <p>Only codes that begin with an enabled prefix are kept.</p>
-        <div class="stack">
-            @if (Prefixes.Count == 0)
-            {
-                <div class="notice">No prefixes yet. Add at least one to enable extraction.</div>
-            }
-            else
-            {
-                @foreach (var prefix in Prefixes)
+        <div class="panel-body" id="prefixes-panel-body" hidden="@(!ShowPrefixesPanel)">
+            <p>Only codes that begin with an enabled prefix are kept.</p>
+            <div class="stack">
+                @if (Prefixes.Count == 0)
                 {
-                    <div class="prefix-pill">
-                        <label>
-                            <input type="checkbox" checked="@prefix.IsActive" @onchange="(args) => TogglePrefix(prefix, args)" />
-                            <span class="prefix-value">@prefix.Value</span>
-                        </label>
-                        <button class="btn-ghost" @onclick="() => RemovePrefix(prefix)">Remove</button>
-                    </div>
+                    <div class="notice">No prefixes yet. Add at least one to enable extraction.</div>
                 }
-            }
-            <div class="input-row">
-                <input placeholder="Add prefix" @bind="NewPrefix" />
-                <button class="btn-primary" @onclick="AddPrefix">Add</button>
+                else
+                {
+                    @foreach (var prefix in Prefixes)
+                    {
+                        <div class="prefix-pill">
+                            <label>
+                                <input type="checkbox" checked="@prefix.IsActive" @onchange="(args) => TogglePrefix(prefix, args)" />
+                                <span class="prefix-value">@prefix.Value</span>
+                            </label>
+                            <button class="btn-ghost" @onclick="() => RemovePrefix(prefix)">Remove</button>
+                        </div>
+                    }
+                }
+                <div class="input-row">
+                    <input placeholder="Add prefix" @bind="NewPrefix" />
+                    <button class="btn-primary" @onclick="AddPrefix">Add</button>
+                </div>
             </div>
         </div>
     </div>
@@ -147,37 +165,46 @@
 <div class="panel" style="margin-top: 24px;">
     <div class="panel-header">
         <h2>Saved codes</h2>
-        <span class="badge">@SavedEntries.Count total</span>
+        <div class="panel-header-actions">
+            <span class="badge">@SavedEntries.Count total</span>
+            <button class="btn-ghost panel-toggle" @onclick="() => ShowSavedPanel = !ShowSavedPanel" aria-expanded="@ShowSavedPanel" aria-controls="saved-panel-body" title="Toggle saved codes">
+                <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M6.7 9.2 12 14.5l5.3-5.3 1.4 1.4-6.7 6.7-6.7-6.7z" />
+                </svg>
+            </button>
+        </div>
     </div>
-    <p>These stay available in this browser, ready for reprint.</p>
+    <div class="panel-body" id="saved-panel-body" hidden="@(!ShowSavedPanel)">
+        <p>These stay available in this browser, ready for reprint.</p>
 
-    @if (SavedEntries.Count == 0)
-    {
-        <div class="notice">No saved codes yet.</div>
-    }
-    else
-    {
-        <div class="code-list">
-            @foreach (var entry in SavedEntries)
-            {
-                <div class="code-card">
-                    <div class="barcode-wrap">
-                        <svg id="@($"saved-{entry.Id}")"></svg>
+        @if (SavedEntries.Count == 0)
+        {
+            <div class="notice">No saved codes yet.</div>
+        }
+        else
+        {
+            <div class="code-list">
+                @foreach (var entry in SavedEntries)
+                {
+                    <div class="code-card">
+                        <div class="barcode-wrap">
+                            <svg id="@($"saved-{entry.Id}")"></svg>
+                        </div>
+                        <div class="code-card-header">
+                            <div class="code-id">@entry.Code</div>
+                            <span class="status-pill">Saved</span>
+                        </div>
+                        <div class="code-actions">
+                            <button class="btn-ghost" @onclick="() => RemoveSavedCode(entry)">Remove</button>
+                        </div>
                     </div>
-                    <div class="code-card-header">
-                        <div class="code-id">@entry.Code</div>
-                        <span class="status-pill">Saved</span>
-                    </div>
-                    <div class="code-actions">
-                        <button class="btn-ghost" @onclick="() => RemoveSavedCode(entry)">Remove</button>
-                    </div>
-                </div>
-            }
-        </div>
-        <div style="margin-top: 12px;">
-            <button class="btn-ghost" @onclick="ClearSavedCodes">Clear all</button>
-        </div>
-    }
+                }
+            </div>
+            <div style="margin-top: 12px;">
+                <button class="btn-ghost" @onclick="ClearSavedCodes">Clear all</button>
+            </div>
+        }
+    </div>
 </div>
 
 @code {
@@ -190,6 +217,9 @@
     private bool IsBusy { get; set; }
     private bool IsCameraOn { get; set; }
     private bool _needsBarcodeRender;
+    private bool ShowOcrPanel { get; set; }
+    private bool ShowPrefixesPanel { get; set; }
+    private bool ShowSavedPanel { get; set; }
 
     private string CameraStatus => IsCameraOn ? "Camera live" : "Camera off";
 

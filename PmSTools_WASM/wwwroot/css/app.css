@@ -285,6 +285,7 @@ button, input, textarea {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 14px;
     margin-top: 28px;
+    align-items: start;
 }
 
 .panel {
@@ -311,6 +312,36 @@ button, input, textarea {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
+}
+
+.panel-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-toggle {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 10px;
+}
+
+.panel-toggle[aria-expanded="true" i] {
+    background: #222c38;
+    border: 1px solid rgba(255, 138, 61, 0.4);
+    color: #ffc4a1;
+}
+
+.panel-toggle .chevron {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+    transition: transform 0.2s ease;
+}
+
+.panel-toggle[aria-expanded="true" i] .chevron {
+    transform: rotate(180deg);
 }
 
 .badge {
