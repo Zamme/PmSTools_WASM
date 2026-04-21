@@ -1,11 +1,28 @@
-﻿<nav class="app-nav" aria-label="Main">
-    <details class="nav-dropdown">
+﻿@inject IJSRuntime JS
+
+<nav class="app-nav" aria-label="Main">
+    <details class="nav-dropdown" id="mainNavMenu">
         <summary class="nav-trigger">Menu</summary>
         <div class="nav-menu" role="menu">
-            <NavLink href="" Match="NavLinkMatch.All" class="nav-item" role="menuitem">Overview</NavLink>
-            <NavLink href="code2barcode" class="nav-item" role="menuitem">Code to Barcode</NavLink>
-            <NavLink href="find-address" class="nav-item" role="menuitem">Find Address</NavLink>
-            <NavLink href="create-route" class="nav-item" role="menuitem">Create Route</NavLink>
+            <NavLink href="" Match="NavLinkMatch.All" class="nav-item" role="menuitem" @onclick="CloseMenu">Overview</NavLink>
+            <NavLink href="code2barcode" class="nav-item" role="menuitem" @onclick="CloseMenu">Code to Barcode</NavLink>
+            <NavLink href="find-address" class="nav-item" role="menuitem" @onclick="CloseMenu">Find Address</NavLink>
+            <NavLink href="create-route" class="nav-item" role="menuitem" @onclick="CloseMenu">Create Route</NavLink>
         </div>
     </details>
 </nav>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("pmstools.setupNavMenuCloseOnOutside", "mainNavMenu");
+        }
+    }
+
+    private async Task CloseMenu()
+    {
+        await JS.InvokeVoidAsync("pmstools.closeNavMenu", "mainNavMenu");
+    }
+}

@@ -201,13 +201,38 @@ window.pmstools = {
       window.JsBarcode(svg, value, {
         format: "CODE39",
         lineColor: "#151718",
-        background: "transparent",
-        height: 64,
+        background: "#ffffff",
+        height: 96,
         displayValue: false,
         margin: 0
       });
     } catch (error) {
       console.warn("Barcode render failed", error);
     }
+  }
+  ,
+  closeNavMenu: function (menuId) {
+    const menu = document.getElementById(menuId);
+    if (menu && menu.open) {
+      menu.open = false;
+    }
+  },
+  setupNavMenuCloseOnOutside: function (menuId) {
+    const menu = document.getElementById(menuId);
+    if (!menu || menu.dataset.outsideCloseBound === "true") {
+      return;
+    }
+
+    menu.dataset.outsideCloseBound = "true";
+
+    document.addEventListener("click", function (event) {
+      if (!menu.open) {
+        return;
+      }
+
+      if (!menu.contains(event.target)) {
+        menu.open = false;
+      }
+    });
   }
 };

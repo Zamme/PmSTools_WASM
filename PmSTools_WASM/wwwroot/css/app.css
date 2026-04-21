@@ -1,16 +1,16 @@
 :root {
-    color-scheme: light;
-    --ink: #0f1215;
-    --ink-soft: #323842;
-    --surface: #f6f3ee;
-    --surface-strong: #ffffff;
+    color-scheme: dark;
+    --ink: #edf1f7;
+    --ink-soft: #b7c0cc;
+    --surface: #0d1117;
+    --surface-strong: #151b24;
     --accent: #ff8a3d;
     --accent-strong: #ff6a2b;
-    --accent-muted: #ffe0cf;
-    --teal: #0ea5a4;
-    --teal-dark: #0b7d7c;
-    --border: #d7cfc4;
-    --shadow: 0 20px 40px rgba(15, 18, 21, 0.12);
+    --accent-muted: #3b2516;
+    --teal: #39d0c9;
+    --teal-dark: #1aa39c;
+    --border: #2a313b;
+    --shadow: 0 20px 44px rgba(5, 8, 12, 0.6);
 }
 
 * {
@@ -25,8 +25,8 @@ body {
     margin: 0;
     font-family: "Space Grotesk", "Segoe UI", sans-serif;
     color: var(--ink);
-    background: radial-gradient(circle at top left, #fff1e2 0%, #f6f3ee 45%, #e6eff0 100%);
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: radial-gradient(circle at top left, #1f262f 0%, #0d1117 48%, #0a0e13 100%);
+    padding: env(safe-area-inset-top) calc(2px + env(safe-area-inset-right)) env(safe-area-inset-bottom) calc(2px + env(safe-area-inset-left));
 }
 
 h1, h2, h3 {
@@ -52,14 +52,15 @@ button, input, textarea {
 }
 
 .app-header {
-    padding: calc(20px + env(safe-area-inset-top)) calc(28px + env(safe-area-inset-right)) 20px calc(28px + env(safe-area-inset-left));
+    padding: calc(14px + env(safe-area-inset-top)) calc(2px + env(safe-area-inset-right)) 14px calc(2px + env(safe-area-inset-left));
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    background: rgba(255, 255, 255, 0.7);
+    flex-wrap: wrap;
+    background: rgba(13, 17, 23, 0.85);
     backdrop-filter: blur(14px);
-    border-bottom: 1px solid rgba(215, 207, 196, 0.7);
+    border-bottom: 1px solid rgba(42, 49, 59, 0.7);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -68,6 +69,7 @@ button, input, textarea {
 .brand {
     display: flex;
     flex-direction: column;
+    min-width: 0;
 }
 
 .brand-title {
@@ -81,8 +83,9 @@ button, input, textarea {
 
 .app-nav {
     display: flex;
-    gap: 12px;
+    gap: 8px;
     position: relative;
+    margin-left: auto;
 }
 
 .nav-dropdown {
@@ -93,11 +96,11 @@ button, input, textarea {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
+    padding: 4px 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.85);
-    border: 1px solid rgba(50, 56, 66, 0.15);
-    color: var(--ink-soft);
+    background: #ff8a3d;
+    border: 1px solid rgba(255, 138, 61, 0.55);
+    color: #1a0e05;
     font-weight: 600;
     font-size: 0.9rem;
     cursor: pointer;
@@ -119,18 +122,19 @@ button, input, textarea {
     top: calc(100% + 10px);
     right: 0;
     min-width: 190px;
+    max-width: calc(100vw - 4px);
     display: grid;
     gap: 6px;
-    padding: 10px;
+    padding: 8px;
     border-radius: 12px;
-    background: #fff;
-    border: 1px solid rgba(215, 207, 196, 0.8);
-    box-shadow: 0 12px 22px rgba(15, 18, 21, 0.12);
+    background: #151b24;
+    border: 1px solid rgba(42, 49, 59, 0.9);
+    box-shadow: 0 12px 26px rgba(5, 8, 12, 0.55);
     z-index: 20;
 }
 
 .nav-menu .nav-item {
-    padding: 8px 10px;
+    padding: 6px 8px;
     border-radius: 10px;
     color: var(--ink-soft);
     font-weight: 600;
@@ -149,27 +153,34 @@ button, input, textarea {
 .app-main {
     width: min(1200px, 100%);
     margin: 0 auto;
-    padding: 32px calc(20px + env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+    padding: 20px calc(2px + env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) calc(2px + env(safe-area-inset-left));
     flex: 1;
 }
 
 .app-footer {
-    padding: 18px 20px 30px;
+    padding: 18px 2px 30px;
     text-align: center;
     font-size: 0.85rem;
     color: var(--ink-soft);
 }
 
+.app-footer a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
 .hero {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 24px;
+    gap: 16px;
     align-items: center;
-    padding: 28px;
+    padding: 16px;
     border-radius: 24px;
-    background: linear-gradient(120deg, #ffffff 0%, #fff4e8 50%, #f3fbfb 100%);
+    background: linear-gradient(120deg, #151b24 0%, #1a1410 50%, #0f1c1d 100%);
     box-shadow: var(--shadow);
-    border: 1px solid rgba(255, 138, 61, 0.25);
+    border: 1px solid rgba(255, 138, 61, 0.28);
 }
 
 .hero h1 {
@@ -188,6 +199,33 @@ button, input, textarea {
     gap: 12px;
     flex-wrap: wrap;
     margin-top: 18px;
+    justify-content: center;
+    align-items: center;
+}
+
+.hero-cta-button {
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    gap: 0;
+    border-radius: 18px;
+}
+
+.hero-cta-button img {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+}
+
+.hero-cta-button.btn-ghost {
+    background: #1b2430;
+    border: 1px solid rgba(183, 192, 204, 0.28);
+}
+
+.hero-cta-button.hero-cta-route {
+    background: #bfe4ff;
+    border: 1px solid rgba(91, 148, 201, 0.65);
+    color: #0b2a44;
 }
 
 .btn-primary,
@@ -212,13 +250,13 @@ button, input, textarea {
 
 .btn-secondary {
     background: var(--teal);
-    color: #042f2f;
+    color: #041f1f;
     box-shadow: 0 10px 20px rgba(14, 165, 164, 0.35);
 }
 
 .btn-ghost {
-    background: transparent;
-    border: 1px solid rgba(50, 56, 66, 0.2);
+    background: #1b2430;
+    border: 1px solid rgba(183, 192, 204, 0.25);
     color: var(--ink-soft);
 }
 
@@ -229,17 +267,30 @@ button, input, textarea {
     box-shadow: 0 12px 24px rgba(15, 18, 21, 0.15);
 }
 
+.icon-button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 12px;
+}
+
+.icon-button svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
 .panel-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 20px;
+    gap: 14px;
     margin-top: 28px;
 }
 
 .panel {
     background: var(--surface-strong);
     border-radius: 18px;
-    padding: 18px;
+    padding: 14px 2px;
     border: 1px solid var(--border);
     box-shadow: 0 16px 26px rgba(15, 18, 21, 0.08);
 }
@@ -263,12 +314,12 @@ button, input, textarea {
 }
 
 .badge {
-    padding: 4px 10px;
+    padding: 3px 9px;
     border-radius: 999px;
     font-size: 0.75rem;
     font-weight: 600;
     background: var(--accent-muted);
-    color: #a54316;
+    color: #ffc4a1;
 }
 
 .input-row {
@@ -283,7 +334,8 @@ button, input, textarea {
     padding: 10px 12px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: #fff;
+    background: #0f141b;
+    color: var(--ink);
 }
 
 .stack {
@@ -297,10 +349,10 @@ button, input, textarea {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-radius: 12px;
-    background: #f8f6f3;
-    border: 1px solid rgba(215, 207, 196, 0.7);
+    background: #121822;
+    border: 1px solid rgba(42, 49, 59, 0.7);
 }
 
 .prefix-pill input[type="checkbox"] {
@@ -336,7 +388,8 @@ button, input, textarea {
     right: 12px;
     padding: 6px 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(8, 12, 18, 0.75);
+    color: var(--ink);
     font-size: 0.75rem;
 }
 
@@ -351,10 +404,10 @@ button, input, textarea {
 }
 
 .code-card {
-    background: #fff;
-    border: 1px solid rgba(215, 207, 196, 0.7);
+    background: #151b24;
+    border: 1px solid rgba(42, 49, 59, 0.7);
     border-radius: 16px;
-    padding: 14px;
+    padding: 10px 2px;
     display: grid;
     gap: 10px;
 }
@@ -380,10 +433,10 @@ button, input, textarea {
 
 .barcode-wrap {
     width: 100%;
-    padding: 10px;
+    padding: 6px;
     border-radius: 12px;
-    background: #f7f7f7;
-    border: 1px solid rgba(215, 207, 196, 0.5);
+    background: #ffffff;
+    border: 1px solid rgba(42, 49, 59, 0.6);
     display: flex;
     justify-content: center;
 }
@@ -398,8 +451,8 @@ button, input, textarea {
     padding: 4px 8px;
     border-radius: 999px;
     font-size: 0.75rem;
-    background: #e2f7f7;
-    color: #0b4f4f;
+    background: #163336;
+    color: #9ee9e7;
 }
 
 .address-grid {
@@ -420,7 +473,8 @@ button, input, textarea {
     padding: 10px 12px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: #fff;
+    background: #0f141b;
+    color: var(--ink);
 }
 
 .candidate-list,
@@ -433,10 +487,10 @@ button, input, textarea {
 .candidate-card,
 .route-card,
 .stop-card {
-    background: #fff;
-    border: 1px solid rgba(215, 207, 196, 0.7);
+    background: #151b24;
+    border: 1px solid rgba(42, 49, 59, 0.7);
     border-radius: 16px;
-    padding: 14px;
+    padding: 10px 2px;
     display: grid;
     gap: 12px;
 }
@@ -475,9 +529,9 @@ button, input, textarea {
 .notice {
     padding: 10px 12px;
     border-radius: 12px;
-    background: #fff3eb;
+    background: #2b1c14;
     border: 1px solid rgba(255, 138, 61, 0.3);
-    color: #8a3b15;
+    color: #ffc4a1;
 }
 
 .loading {
@@ -517,12 +571,13 @@ button, input, textarea {
 
 @media (max-width: 720px) {
     .app-header {
-        flex-direction: column;
-        align-items: flex-start;
+        flex-direction: row;
+        align-items: center;
     }
 
     .app-nav {
         flex-wrap: wrap;
+        align-self: center;
     }
 
     .brand-title {
@@ -540,6 +595,9 @@ button, input, textarea {
 
     .nav-menu {
         min-width: 170px;
+        right: 0;
+        left: auto;
+        max-width: calc(100vw - 4px);
     }
 
     .nav-menu .nav-item {
@@ -547,11 +605,11 @@ button, input, textarea {
     }
 
     .app-main {
-        padding: 20px calc(16px + env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+        padding: 16px calc(2px + env(safe-area-inset-right)) calc(32px + env(safe-area-inset-bottom)) calc(2px + env(safe-area-inset-left));
     }
 
     .hero {
-        padding: 16px;
+        padding: 12px;
         grid-template-columns: 1fr;
     }
 
