@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace PmSTools_WASM.Services;
 
@@ -24,65 +25,84 @@ public sealed class BarcodeParser
 
         var results = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var parts = input.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var upperInput = input.ToUpperInvariant();
+        var matches = Regex.Matches(upperInput, "[A-Z0-9]+");
 
-        foreach (var part in parts)
+        foreach (Match match in matches)
         {
-            var upperText = part.ToUpperInvariant();
-            var normalized = upperText.Replace("O", "0");
+            var cleaned = match.Value;
+            var normalized = cleaned.Replace("O", "0");
 
             if (normalized.Length == 22 && TryAppendDniLikeControl(normalized, out var withControl))
             {
                 LogDniControlAppended(normalized, withControl);
                 normalized = withControl;
-                upperText = withControl;
+                cleaned = withControl;
             }
 
-            var isShortCode = normalized.Length == 13;
-            var isLongCode = normalized.Length == 23;
-            var isLongNoControlCode = normalized.Length == 22;
-            if (!isShortCode && !isLongCode && !isLongNoControlCode)
+            TryAddCandidate(normalized, cleaned, prefixList, results, seen);
+        }
+
+        var lines = upperInput.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            var lineMatches = Regex.Matches(line, "[A-Z0-9]+");
+            if (lineMatches.Count < 2)
             {
-                LogRejected(normalized, $"invalid length ({normalized.Length})");
                 continue;
             }
 
-            var startsWithTwoLetters = upperText.Length >= 2 && char.IsLetter(upperText[0]) && char.IsLetter(upperText[1]);
-            var startsWith90 = normalized.StartsWith("90", StringComparison.OrdinalIgnoreCase);
-
-            if (isShortCode && !startsWithTwoLetters)
+            for (var i = 0; i < lineMatches.Count - 1; i++)
             {
-                LogRejected(normalized, "13-char code does not start with two letters");
-                continue;
-            }
-
-            if ((isLongCode || isLongNoControlCode) && !startsWithTwoLetters && !startsWith90)
-            {
-                LogRejected(normalized, "long code does not start with two letters or 90");
-                continue;
-            }
-
-            var matchesPrefix = false;
-            foreach (var prefix in prefixList)
-            {
-                if (normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    matchesPrefix = true;
-                    if (seen.Add(normalized))
-                    {
-                        results.Add(normalized);
-                    }
-                    break;
-                }
-            }
-
-            if (!matchesPrefix)
-            {
-                LogRejected(normalized, "no matching prefix");
+                var left = lineMatches[i].Value;
+                var right = lineMatches[i + 1].Value;
+                var combined = (left + right).Replace("O", "0");
+                TryAddCandidate(combined, combined, prefixList, results, seen);
             }
         }
 
         return results;
+    }
+
+    private static void TryAddCandidate(string normalized, string cleaned, List<string> prefixList, List<string> results, HashSet<string> seen)
+    {
+        var isShortCode = normalized.Length == 13;
+        var isLongCode = normalized.Length == 23;
+        var isLongNoControlCode = normalized.Length == 22;
+        if (!isShortCode && !isLongCode && !isLongNoControlCode)
+        {
+            LogRejected(normalized, $"invalid length ({normalized.Length})");
+            return;
+        }
+
+        var startsWithTwoLetters = cleaned.Length >= 2 && char.IsLetter(cleaned[0]) && char.IsLetter(cleaned[1]);
+        var startsWith90 = normalized.StartsWith("90", StringComparison.OrdinalIgnoreCase);
+
+        if (isShortCode && !startsWithTwoLetters)
+        {
+            LogRejected(normalized, "13-char code does not start with two letters");
+            return;
+        }
+
+        if ((isLongCode || isLongNoControlCode) && !startsWithTwoLetters && !startsWith90)
+        {
+            LogRejected(normalized, "long code does not start with two letters or 90");
+            return;
+        }
+
+        foreach (var prefix in prefixList)
+        {
+            if (normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                if (seen.Add(normalized))
+                {
+                    results.Add(normalized);
+                }
+                return;
+            }
+        }
+
+        LogRejected(normalized, "no matching prefix");
     }
 
     private static bool TryAppendDniLikeControl(string dataPart, out string codeWithControl)

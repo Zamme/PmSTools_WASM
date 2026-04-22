@@ -32,8 +32,25 @@
         }
     </div>
     <div class="camera-box">
-        <video id="cameraStream" playsinline muted></video>
-        <div class="camera-status">@CameraStatus</div>
+        <div style="display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;">
+            <div style="flex: 1 1 240px; min-width: 220px;">
+                <video id="cameraStream" playsinline muted></video>
+                <div class="camera-status">@CameraStatus</div>
+            </div>
+            <div style="flex: 1 1 240px; min-width: 220px;">
+                @if (!string.IsNullOrWhiteSpace(LastImageDataUrl))
+                {
+                    <div class="notice">
+                        <strong>Preview:</strong>
+                        <img src="@LastImageDataUrl" alt="Captured or uploaded label" style="display: block; max-width: 100%; margin-top: 8px; border-radius: 8px;" />
+                    </div>
+                }
+                else
+                {
+                    <div class="notice">No capture yet.</div>
+                }
+            </div>
+        </div>
     </div>
 </section>
 
@@ -116,6 +133,7 @@
                     </div>
                 }
                 <textarea class="ocr-preview" placeholder="OCR text will appear here" @bind="OcrText"></textarea>
+                <textarea class="ocr-preview" placeholder="Cleaned OCR preview (A-Z, 0-9 only)" readonly>@CleanOcrPreview</textarea>
                 <button class="btn-ghost" @onclick="RebuildFromOcrText" disabled="@IsBusy">Rebuild codes from text</button>
             </div>
         </div>
@@ -214,6 +232,7 @@
     private string? OcrText { get; set; }
     private string? StatusMessage { get; set; }
     private string? NewPrefix { get; set; }
+    private string? LastImageDataUrl { get; set; }
     private bool IsBusy { get; set; }
     private bool IsCameraOn { get; set; }
     private bool _needsBarcodeRender;
@@ -222,6 +241,7 @@
     private bool ShowSavedPanel { get; set; }
 
     private string CameraStatus => IsCameraOn ? "Camera live" : "Camera off";
+    private string CleanOcrPreview => string.Join(" ", Parser.ParseCodes(OcrText ?? string.Empty, Prefixes.Where(prefix => prefix.IsActive).Select(prefix => prefix.Value)));
 
     protected override async Task OnInitializedAsync()
     {
@@ -297,7 +317,8 @@
                 throw new InvalidOperationException("Unable to capture frame.");
             }
 
-            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl);
+            LastImageDataUrl = dataUrl;
+            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl, new { preprocess = false, whitelist = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", lang = "eng", psm = 11, dpi = 300 });
         });
     }
 
@@ -317,7 +338,8 @@
             var bytes = memoryStream.ToArray();
             var base64 = Convert.ToBase64String(bytes);
             var dataUrl = $"data:{file.ContentType};base64,{base64}";
-            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl);
+            LastImageDataUrl = dataUrl;
+            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl, new { preprocess = true, maxDim = 1600, threshold = 170, contrast = 1.15, whitelist = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", lang = "eng", psm = 11, dpi = 300 });
         });
     }
 
