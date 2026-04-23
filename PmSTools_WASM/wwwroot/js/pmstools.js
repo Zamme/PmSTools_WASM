@@ -138,11 +138,84 @@ window.pmstools = {
     ctx.drawImage(video, 0, 0, width, height);
     return canvas.toDataURL("image/png");
   },
+  loadOpenCv: (function () {
+    let loadPromise = null;
+
+    function isReady() {
+      return !!(window.cv && typeof window.cv.imread === "function" && typeof window.cv.Mat === "function");
+    }
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error("Failed to load " + src));
+        document.head.appendChild(script);
+      });
+    }
+
+    function waitUntilReady(timeoutMs) {
+      return new Promise((resolve) => {
+        const started = Date.now();
+
+        const check = function () {
+          if (isReady()) {
+            resolve(true);
+            return;
+          }
+
+          if (Date.now() - started >= timeoutMs) {
+            resolve(false);
+            return;
+          }
+
+          setTimeout(check, 100);
+        };
+
+        check();
+      });
+    }
+
+    return async function () {
+      if (isReady()) {
+        return true;
+      }
+
+      if (!loadPromise) {
+        loadPromise = (async () => {
+          const existingScript = Array.from(document.scripts || []).some((script) => {
+            const src = script && script.src ? script.src : "";
+            return src.includes("opencv.js");
+          });
+
+          try {
+            if (!existingScript) {
+              await loadScript("https://docs.opencv.org/4.x/opencv.js");
+            }
+          } catch (error) {
+            console.warn("OpenCV load failed", error);
+          }
+
+          return waitUntilReady(15000);
+        })();
+      }
+
+      const loaded = await loadPromise;
+      return !!loaded && isReady();
+    };
+  })(),
   preprocessDataUrl: async function (dataUrl, options) {
     const opts = Object.assign({
       preprocess: true,
       maxDim: 1600,
       grayscale: true,
+      adaptiveThreshold: true,
+      adaptiveBlockSize: 31,
+      adaptiveC: 7,
+      denoiseKernelSize: 3,
+      closeKernelSize: 2,
       threshold: 170,
       contrast: 1.15
     }, options || {});
@@ -215,6 +288,76 @@ window.pmstools = {
     }
 
     ctx.drawImage(image, srcX, srcY, srcW, srcH, 0, 0, width, height);
+
+    const openCvReady = await window.pmstools.loadOpenCv();
+    if (openCvReady) {
+      let src = null;
+      let gray = null;
+      let denoised = null;
+      let enhanced = null;
+      let binary = null;
+      let morph = null;
+      let rgba = null;
+      let kernel = null;
+
+      try {
+        src = window.cv.imread(canvas);
+        gray = new window.cv.Mat();
+        denoised = new window.cv.Mat();
+        enhanced = new window.cv.Mat();
+        binary = new window.cv.Mat();
+        morph = new window.cv.Mat();
+        rgba = new window.cv.Mat();
+
+        window.cv.cvtColor(src, gray, window.cv.COLOR_RGBA2GRAY, 0);
+        const denoiseKernelSize = Math.max(1, Math.min(9, Number(opts.denoiseKernelSize) || 3));
+        const normalizedDenoiseKernelSize = denoiseKernelSize % 2 === 0 ? denoiseKernelSize + 1 : denoiseKernelSize;
+        window.cv.GaussianBlur(gray, denoised, new window.cv.Size(normalizedDenoiseKernelSize, normalizedDenoiseKernelSize), 0, 0, window.cv.BORDER_DEFAULT);
+
+        const contrast = Number(opts.contrast) || 1.15;
+        window.cv.convertScaleAbs(denoised, enhanced, contrast, 0);
+
+        if (typeof window.cv.CLAHE === "function") {
+          const clahe = new window.cv.CLAHE(2.0, new window.cv.Size(8, 8));
+          try {
+            clahe.apply(enhanced, enhanced);
+          } finally {
+            clahe.delete();
+          }
+        }
+
+        const useAdaptiveThreshold = !!opts.adaptiveThreshold;
+        const threshold = Number(opts.threshold);
+        if (!useAdaptiveThreshold && Number.isFinite(threshold)) {
+          const clampedThreshold = Math.max(0, Math.min(255, threshold));
+          window.cv.threshold(enhanced, binary, clampedThreshold, 255, window.cv.THRESH_BINARY);
+        } else {
+          const adaptiveBlockSizeRaw = Math.max(3, Math.min(99, Number(opts.adaptiveBlockSize) || 31));
+          const adaptiveBlockSize = adaptiveBlockSizeRaw % 2 === 0 ? adaptiveBlockSizeRaw + 1 : adaptiveBlockSizeRaw;
+          const adaptiveC = Number.isFinite(Number(opts.adaptiveC)) ? Number(opts.adaptiveC) : 7;
+          window.cv.adaptiveThreshold(enhanced, binary, 255, window.cv.ADAPTIVE_THRESH_GAUSSIAN_C, window.cv.THRESH_BINARY, adaptiveBlockSize, adaptiveC);
+        }
+
+        const closeKernelSize = Math.max(1, Math.min(7, Number(opts.closeKernelSize) || 2));
+        kernel = window.cv.getStructuringElement(window.cv.MORPH_RECT, new window.cv.Size(closeKernelSize, closeKernelSize));
+        window.cv.morphologyEx(binary, morph, window.cv.MORPH_CLOSE, kernel);
+        window.cv.cvtColor(morph, rgba, window.cv.COLOR_GRAY2RGBA, 0);
+        window.cv.imshow(canvas, rgba);
+
+        return canvas.toDataURL("image/png");
+      } catch (error) {
+        console.warn("OpenCV preprocessing failed; falling back to canvas pipeline", error);
+      } finally {
+        if (src) src.delete();
+        if (gray) gray.delete();
+        if (denoised) denoised.delete();
+        if (enhanced) enhanced.delete();
+        if (binary) binary.delete();
+        if (morph) morph.delete();
+        if (rgba) rgba.delete();
+        if (kernel) kernel.delete();
+      }
+    }
 
     if (!opts.grayscale && (opts.threshold == null || opts.contrast == null)) {
       return canvas.toDataURL("image/png");

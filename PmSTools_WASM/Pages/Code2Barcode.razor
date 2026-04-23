@@ -435,10 +435,10 @@
 
             LastImageDataUrl = dataUrl;
             LastImageComesFromFile = false;
-            LastImageUsesPreprocess = false;
+            LastImageUsesPreprocess = true;
             ResetCropSelection();
             _cropSelectorNeedsSync = true;
-            return await ReadImageAsync(dataUrl, preprocess: false, useSelectedArea: false);
+            return await ReadImageAsync(dataUrl, preprocess: true, useSelectedArea: false);
         });
     }
 
@@ -529,8 +529,13 @@
         if (preprocess)
         {
             options["maxDim"] = 1600;
-            options["threshold"] = 170;
-            options["contrast"] = 1.15;
+            options["adaptiveThreshold"] = true;
+            options["adaptiveBlockSize"] = 31;
+            options["adaptiveC"] = 7;
+            options["denoiseKernelSize"] = 3;
+            options["closeKernelSize"] = 2;
+            options["threshold"] = 165;
+            options["contrast"] = 1.2;
         }
 
         if (useSelectedArea)
