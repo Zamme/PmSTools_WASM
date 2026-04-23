@@ -519,6 +519,22 @@ window.pmstools = {
 
       let pointerId = null;
       let startPoint = null;
+      let isTouchDragging = false;
+
+      const updateSelection = function (clientX, clientY) {
+        if (!startPoint) {
+          return;
+        }
+
+        const currentPoint = normalizePoint(element, clientX, clientY);
+        const selection = toSelection(startPoint, currentPoint);
+        dotNetRef.invokeMethodAsync("UpdateCropSelectionFromJs", selection.left, selection.top, selection.width, selection.height);
+      };
+
+      const beginSelection = function (clientX, clientY) {
+        startPoint = normalizePoint(element, clientX, clientY);
+        dotNetRef.invokeMethodAsync("UpdateCropSelectionFromJs", startPoint.x, startPoint.y, 0.001, 0.001);
+      };
 
       const onPointerDown = function (event) {
         if (event.button != null && event.button !== 0) {
@@ -527,9 +543,15 @@ window.pmstools = {
 
         event.preventDefault();
         pointerId = event.pointerId;
-        startPoint = normalizePoint(element, event.clientX, event.clientY);
-        element.setPointerCapture(pointerId);
-        dotNetRef.invokeMethodAsync("UpdateCropSelectionFromJs", startPoint.x, startPoint.y, 0.001, 0.001);
+        beginSelection(event.clientX, event.clientY);
+
+        if (typeof element.setPointerCapture === "function") {
+          try {
+            element.setPointerCapture(pointerId);
+          } catch {
+            // Ignore capture failures on browsers that expose pointer events partially.
+          }
+        }
       };
 
       const onPointerMove = function (event) {
@@ -538,9 +560,7 @@ window.pmstools = {
         }
 
         event.preventDefault();
-        const currentPoint = normalizePoint(element, event.clientX, event.clientY);
-        const selection = toSelection(startPoint, currentPoint);
-        dotNetRef.invokeMethodAsync("UpdateCropSelectionFromJs", selection.left, selection.top, selection.width, selection.height);
+        updateSelection(event.clientX, event.clientY);
       };
 
       const finishSelection = function (event) {
@@ -549,25 +569,113 @@ window.pmstools = {
         }
 
         event.preventDefault();
-        if (element.hasPointerCapture(pointerId)) {
-          element.releasePointerCapture(pointerId);
+        if (typeof element.hasPointerCapture === "function" && typeof element.releasePointerCapture === "function") {
+          try {
+            if (element.hasPointerCapture(pointerId)) {
+              element.releasePointerCapture(pointerId);
+            }
+          } catch {
+            // Ignore release failures from inconsistent pointer-capture implementations.
+          }
         }
 
         pointerId = null;
         startPoint = null;
       };
 
-      element.addEventListener("pointerdown", onPointerDown);
-      element.addEventListener("pointermove", onPointerMove);
-      element.addEventListener("pointerup", finishSelection);
-      element.addEventListener("pointercancel", finishSelection);
+      const onTouchStart = function (event) {
+        if (!event.touches || event.touches.length !== 1) {
+          return;
+        }
+
+        event.preventDefault();
+        const touch = event.touches[0];
+        beginSelection(touch.clientX, touch.clientY);
+        isTouchDragging = true;
+      };
+
+      const onTouchMove = function (event) {
+        if (!isTouchDragging || !startPoint || !event.touches || event.touches.length !== 1) {
+          return;
+        }
+
+        event.preventDefault();
+        const touch = event.touches[0];
+        updateSelection(touch.clientX, touch.clientY);
+      };
+
+      const onTouchEnd = function (event) {
+        if (!isTouchDragging) {
+          return;
+        }
+
+        event.preventDefault();
+        isTouchDragging = false;
+        startPoint = null;
+      };
+
+      const onMouseDown = function (event) {
+        if (event.button !== 0) {
+          return;
+        }
+
+        event.preventDefault();
+        beginSelection(event.clientX, event.clientY);
+      };
+
+      const onMouseMove = function (event) {
+        if (!startPoint) {
+          return;
+        }
+
+        event.preventDefault();
+        updateSelection(event.clientX, event.clientY);
+      };
+
+      const onMouseUp = function (event) {
+        if (!startPoint) {
+          return;
+        }
+
+        event.preventDefault();
+        startPoint = null;
+      };
+
+      if (typeof window.PointerEvent === "function") {
+        element.addEventListener("pointerdown", onPointerDown);
+        element.addEventListener("pointermove", onPointerMove);
+        element.addEventListener("pointerup", finishSelection);
+        element.addEventListener("pointercancel", finishSelection);
+      } else {
+        element.addEventListener("touchstart", onTouchStart, { passive: false });
+        element.addEventListener("touchmove", onTouchMove, { passive: false });
+        element.addEventListener("touchend", onTouchEnd, { passive: false });
+        element.addEventListener("touchcancel", onTouchEnd, { passive: false });
+        element.addEventListener("mousedown", onMouseDown);
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+      }
 
       selectionState.set(element, {
         dispose: function () {
-          element.removeEventListener("pointerdown", onPointerDown);
-          element.removeEventListener("pointermove", onPointerMove);
-          element.removeEventListener("pointerup", finishSelection);
-          element.removeEventListener("pointercancel", finishSelection);
+          if (typeof window.PointerEvent === "function") {
+            element.removeEventListener("pointerdown", onPointerDown);
+            element.removeEventListener("pointermove", onPointerMove);
+            element.removeEventListener("pointerup", finishSelection);
+            element.removeEventListener("pointercancel", finishSelection);
+          } else {
+            element.removeEventListener("touchstart", onTouchStart);
+            element.removeEventListener("touchmove", onTouchMove);
+            element.removeEventListener("touchend", onTouchEnd);
+            element.removeEventListener("touchcancel", onTouchEnd);
+            element.removeEventListener("mousedown", onMouseDown);
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+          }
+
+          pointerId = null;
+          startPoint = null;
+          isTouchDragging = false;
         }
       });
     };
