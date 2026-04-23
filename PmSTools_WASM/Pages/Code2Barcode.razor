@@ -3,6 +3,7 @@
 @inject BarcodeStorage Storage
 @inject BarcodeParser Parser
 @inject IJSRuntime JS
+@using Microsoft.JSInterop
 
 <section class="hero">
     <div>
@@ -40,9 +41,43 @@
             <div style="flex: 1 1 240px; min-width: 220px;">
                 @if (!string.IsNullOrWhiteSpace(LastImageDataUrl))
                 {
-                    <div class="notice">
+                    <div class="notice preview-selection-card">
                         <strong>Preview:</strong>
-                        <img src="@LastImageDataUrl" alt="Captured or uploaded label" style="display: block; max-width: 100%; margin-top: 8px; border-radius: 8px;" />
+                        <span class="badge" style="margin-left:8px;">@PreviewSourceLabel</span>
+                        <div class="preview-crop-shell @(LastImageComesFromFile ? string.Empty : "camera-preview-mode")" @ref="PreviewCropShell">
+                            <img src="@LastImageDataUrl" alt="Captured or uploaded label" class="preview-crop-image" />
+                            @if (LastImageComesFromFile)
+                            {
+                                <div class="preview-crop-overlay" aria-hidden="true">
+                                    <div class="preview-crop-box" style="@PreviewCropStyle"></div>
+                                </div>
+                            }
+                        </div>
+                        @if (LastImageComesFromFile)
+                        {
+                            <p class="preview-crop-hint">Drag on the image to mark the approximate code area, then re-run OCR on that region.</p>
+                        }
+                        else
+                        {
+                            <p class="preview-crop-hint">Camera captures are always processed using the full image.</p>
+                        }
+                        <div class="crop-controls">
+                            @if (LastImageComesFromFile)
+                            {
+                                <p class="crop-summary">Area: left @FormatPercent(CropLeftPercent), top @FormatPercent(CropTopPercent), width @FormatPercent(CropWidthPercent), height @FormatPercent(CropHeightPercent)</p>
+                            }
+                            <div class="crop-actions">
+                                @if (LastImageComesFromFile)
+                                {
+                                    <button class="btn-secondary" @onclick="ReadSelectedAreaAsync" disabled="@IsBusy">Read selected area</button>
+                                }
+                                <button class="btn-ghost" @onclick="ReadFullImageAsync" disabled="@IsBusy">Read full image</button>
+                                @if (LastImageComesFromFile)
+                                {
+                                    <button class="btn-ghost" @onclick="ResetCropSelection" disabled="@IsBusy">Reset area</button>
+                                }
+                            </div>
+                        </div>
                     </div>
                 }
                 else
@@ -141,6 +176,47 @@
 
     <div class="panel">
         <div class="panel-header">
+            <h2>Manual code</h2>
+            <div class="panel-header-actions">
+                <span class="badge">Type and generate</span>
+                <button class="btn-ghost panel-toggle" @onclick="() => ShowManualPanel = !ShowManualPanel" aria-expanded="@ShowManualPanel" aria-controls="manual-panel-body" title="Toggle manual code">
+                    <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M6.7 9.2 12 14.5l5.3-5.3 1.4 1.4-6.7 6.7-6.7-6.7z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="panel-body" id="manual-panel-body" hidden="@(!ShowManualPanel)">
+            <p>Type a code manually and generate a barcode instantly.</p>
+            <div class="stack">
+                <div class="input-row">
+                    <input placeholder="Enter code" @bind="ManualCodeInput" @bind:event="oninput" />
+                    <button class="btn-primary" @onclick="GenerateManualBarcode">Generate barcode</button>
+                    <button class="btn-secondary" @onclick="AddManualCodeToLastAsync" disabled="@string.IsNullOrWhiteSpace(ManualBarcodeCode)">Add to last codes</button>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(ManualCodeMessage))
+                {
+                    <div class="notice">@ManualCodeMessage</div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(ManualBarcodeCode))
+                {
+                    <div class="code-card">
+                        <div class="barcode-wrap">
+                            <svg id="manual-barcode"></svg>
+                        </div>
+                        <div class="code-card-header">
+                            <div class="code-id">@ManualBarcodeCode</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
             <h2>Prefixes</h2>
             <div class="panel-header-actions">
                 <span class="badge">Filtering</span>
@@ -232,16 +308,35 @@
     private string? OcrText { get; set; }
     private string? StatusMessage { get; set; }
     private string? NewPrefix { get; set; }
+    private string? ManualCodeInput { get; set; }
+    private string? ManualBarcodeCode { get; set; }
+    private string? ManualCodeMessage { get; set; }
     private string? LastImageDataUrl { get; set; }
     private bool IsBusy { get; set; }
     private bool IsCameraOn { get; set; }
+    private bool LastImageComesFromFile { get; set; }
+    private bool LastImageUsesPreprocess { get; set; }
+    private ElementReference PreviewCropShell { get; set; }
+    private DotNetObjectReference<Code2Barcode>? _dotNetReference;
+    private bool _cropSelectorNeedsSync;
     private bool _needsBarcodeRender;
     private bool ShowOcrPanel { get; set; }
+    private bool ShowManualPanel { get; set; }
     private bool ShowPrefixesPanel { get; set; }
     private bool ShowSavedPanel { get; set; }
+    private double _cropLeftPercent = 18;
+    private double _cropTopPercent = 38;
+    private double _cropWidthPercent = 64;
+    private double _cropHeightPercent = 18;
 
     private string CameraStatus => IsCameraOn ? "Camera live" : "Camera off";
     private string CleanOcrPreview => string.Join(" ", Parser.ParseCodes(OcrText ?? string.Empty, Prefixes.Where(prefix => prefix.IsActive).Select(prefix => prefix.Value)));
+    private string PreviewCropStyle => $"left:{CropLeftPercent:F2}%;top:{CropTopPercent:F2}%;width:{CropWidthPercent:F2}%;height:{CropHeightPercent:F2}%;";
+    private string PreviewSourceLabel => LastImageComesFromFile ? "Source: File (bbox OCR)" : "Source: Camera (full OCR)";
+    private double CropLeftPercent => _cropLeftPercent;
+    private double CropTopPercent => _cropTopPercent;
+    private double CropWidthPercent => _cropWidthPercent;
+    private double CropHeightPercent => _cropHeightPercent;
 
     protected override async Task OnInitializedAsync()
     {
@@ -256,21 +351,39 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_needsBarcodeRender)
+        if (_needsBarcodeRender)
         {
-            return;
+            _needsBarcodeRender = false;
+
+            foreach (var entry in LastCodes)
+            {
+                await JS.InvokeVoidAsync("pmstools.renderBarcode", $"barcode-{entry.Id}", entry.Code);
+            }
+
+            foreach (var entry in SavedEntries)
+            {
+                await JS.InvokeVoidAsync("pmstools.renderBarcode", $"saved-{entry.Id}", entry.Code);
+            }
+
+            if (!string.IsNullOrWhiteSpace(ManualBarcodeCode))
+            {
+                await JS.InvokeVoidAsync("pmstools.renderBarcode", "manual-barcode", ManualBarcodeCode);
+            }
         }
 
-        _needsBarcodeRender = false;
-
-        foreach (var entry in LastCodes)
+        if (_cropSelectorNeedsSync)
         {
-            await JS.InvokeVoidAsync("pmstools.renderBarcode", $"barcode-{entry.Id}", entry.Code);
-        }
+            _cropSelectorNeedsSync = false;
+            _dotNetReference ??= DotNetObjectReference.Create(this);
 
-        foreach (var entry in SavedEntries)
-        {
-            await JS.InvokeVoidAsync("pmstools.renderBarcode", $"saved-{entry.Id}", entry.Code);
+            if (!string.IsNullOrWhiteSpace(LastImageDataUrl) && LastImageComesFromFile)
+            {
+                await JS.InvokeVoidAsync("pmstools.setupCropSelection", PreviewCropShell, _dotNetReference);
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("pmstools.destroyCropSelection", PreviewCropShell);
+            }
         }
     }
 
@@ -317,8 +430,15 @@
                 throw new InvalidOperationException("Unable to capture frame.");
             }
 
+            await JS.InvokeVoidAsync("pmstools.stopCamera", "cameraStream");
+            IsCameraOn = false;
+
             LastImageDataUrl = dataUrl;
-            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl, new { preprocess = false, whitelist = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", lang = "eng", psm = 11, dpi = 300 });
+            LastImageComesFromFile = false;
+            LastImageUsesPreprocess = false;
+            ResetCropSelection();
+            _cropSelectorNeedsSync = true;
+            return await ReadImageAsync(dataUrl, preprocess: false, useSelectedArea: false);
         });
     }
 
@@ -339,8 +459,116 @@
             var base64 = Convert.ToBase64String(bytes);
             var dataUrl = $"data:{file.ContentType};base64,{base64}";
             LastImageDataUrl = dataUrl;
-            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl, new { preprocess = true, maxDim = 1600, threshold = 170, contrast = 1.15, whitelist = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", lang = "eng", psm = 11, dpi = 300 });
+            LastImageComesFromFile = true;
+            LastImageUsesPreprocess = true;
+            ResetCropSelection();
+            _cropSelectorNeedsSync = true;
+            return await ReadImageAsync(dataUrl, preprocess: true, useSelectedArea: false);
         });
+    }
+
+    [JSInvokable]
+    public Task UpdateCropSelectionFromJs(double left, double top, double width, double height)
+    {
+        ApplyCropSelection(left * 100d, top * 100d, width * 100d, height * 100d);
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ReadSelectedAreaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(LastImageDataUrl))
+        {
+            StatusMessage = "Capture or upload an image first.";
+            return;
+        }
+
+        if (!LastImageComesFromFile)
+        {
+            StatusMessage = "Selected-area OCR is available only for uploaded files.";
+            return;
+        }
+
+        await RunOcrAsync(() => ReadImageAsync(LastImageDataUrl, LastImageUsesPreprocess, useSelectedArea: true));
+    }
+
+    private async Task ReadFullImageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(LastImageDataUrl))
+        {
+            StatusMessage = "Capture or upload an image first.";
+            return;
+        }
+
+        await RunOcrAsync(() => ReadImageAsync(LastImageDataUrl, LastImageUsesPreprocess, useSelectedArea: false));
+    }
+
+    private async Task<string> ReadImageAsync(string dataUrl, bool preprocess, bool useSelectedArea)
+    {
+        var effectiveUseSelectedArea = useSelectedArea && LastImageComesFromFile;
+
+        var selectedText = await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl, BuildOcrOptions(preprocess, effectiveUseSelectedArea));
+        if (effectiveUseSelectedArea && string.IsNullOrWhiteSpace(selectedText))
+        {
+            return await JS.InvokeAsync<string>("pmstools.ocrFromDataUrl", dataUrl, BuildOcrOptions(preprocess, useSelectedArea: false));
+        }
+
+        return selectedText;
+    }
+
+    private Dictionary<string, object?> BuildOcrOptions(bool preprocess, bool useSelectedArea)
+    {
+        var options = new Dictionary<string, object?>
+        {
+            ["preprocess"] = preprocess,
+            ["whitelist"] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            ["lang"] = "eng",
+            ["psm"] = 11,
+            ["dpi"] = 300
+        };
+
+        if (preprocess)
+        {
+            options["maxDim"] = 1600;
+            options["threshold"] = 170;
+            options["contrast"] = 1.15;
+        }
+
+        if (useSelectedArea)
+        {
+            options["crop"] = new Dictionary<string, object?>
+            {
+                ["mode"] = "normalized",
+                ["x"] = CropLeftPercent / 100d,
+                ["y"] = CropTopPercent / 100d,
+                ["width"] = CropWidthPercent / 100d,
+                ["height"] = CropHeightPercent / 100d
+            };
+        }
+
+        return options;
+    }
+
+    private void ResetCropSelection()
+    {
+        ApplyCropSelection(18d, 38d, 64d, 18d);
+    }
+
+    private void ApplyCropSelection(double left, double top, double width, double height)
+    {
+        var normalizedLeft = Math.Clamp(left, 0d, 95d);
+        var normalizedTop = Math.Clamp(top, 0d, 95d);
+        var normalizedWidth = Math.Clamp(width, 0.1d, 100d - normalizedLeft);
+        var normalizedHeight = Math.Clamp(height, 0.1d, 100d - normalizedTop);
+
+        _cropLeftPercent = normalizedLeft;
+        _cropTopPercent = normalizedTop;
+        _cropWidthPercent = normalizedWidth;
+        _cropHeightPercent = normalizedHeight;
+    }
+
+    private static string FormatPercent(double value)
+    {
+        return $"{value:F0}%";
     }
 
     private async Task RunOcrAsync(Func<Task<string>> ocrOperation)
@@ -375,6 +603,45 @@
         await Storage.SaveLastCodesAsync(parsed);
         _needsBarcodeRender = true;
         StateHasChanged();
+    }
+
+    private void GenerateManualBarcode()
+    {
+        var normalized = (ManualCodeInput ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            ManualBarcodeCode = null;
+            ManualCodeMessage = "Type a code first.";
+            return;
+        }
+
+        ManualCodeInput = normalized;
+        ManualBarcodeCode = normalized;
+        ManualCodeMessage = "Barcode generated.";
+        _needsBarcodeRender = true;
+    }
+
+    private async Task AddManualCodeToLastAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ManualBarcodeCode))
+        {
+            ManualCodeMessage = "Generate a barcode before adding.";
+            return;
+        }
+
+        var code = ManualBarcodeCode;
+        if (LastCodes.Any(entry => string.Equals(entry.Code, code, StringComparison.OrdinalIgnoreCase)))
+        {
+            ManualCodeMessage = "Code already exists in last codes.";
+            return;
+        }
+
+        var savedCodes = await Storage.GetSavedCodesAsync();
+        LastCodes.Insert(0, new BarcodeEntry(code, savedCodes.Contains(code, StringComparer.OrdinalIgnoreCase)));
+        await Storage.SaveLastCodesAsync(LastCodes.Select(entry => entry.Code).ToList());
+
+        ManualCodeMessage = "Code added to last codes.";
+        _needsBarcodeRender = true;
     }
 
     private async Task TogglePrefix(PrefixItem prefix, ChangeEventArgs args)
@@ -513,9 +780,13 @@
 
     public async ValueTask DisposeAsync()
     {
+        await JS.InvokeVoidAsync("pmstools.destroyCropSelection", PreviewCropShell);
+
         if (IsCameraOn)
         {
             await JS.InvokeVoidAsync("pmstools.stopCamera", "cameraStream");
         }
+
+        _dotNetReference?.Dispose();
     }
 }

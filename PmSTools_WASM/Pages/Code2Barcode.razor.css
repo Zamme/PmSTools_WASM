@@ -1,17 +1,8 @@
-/* /Layout/MainLayout.razor.rz.scp.css */
-:host[b-csqskff322] {
-    display: block;
-}
-/* /Layout/NavMenu.razor.rz.scp.css */
-:host[b-owt3epk5gd] {
-    display: block;
-}
-/* /Pages/Code2Barcode.razor.rz.scp.css */
-.preview-selection-card[b-qgaegzj5sn] {
+.preview-selection-card {
     margin-top: 12px;
 }
 
-.preview-crop-shell[b-qgaegzj5sn] {
+.preview-crop-shell {
     position: relative;
     margin-top: 8px;
     border: 1px solid rgba(21, 23, 24, 0.12);
@@ -23,24 +14,24 @@
     user-select: none;
 }
 
-.preview-crop-shell.camera-preview-mode[b-qgaegzj5sn] {
+.preview-crop-shell.camera-preview-mode {
     cursor: default;
     touch-action: auto;
 }
 
-.preview-crop-image[b-qgaegzj5sn] {
+.preview-crop-image {
     display: block;
     width: 100%;
     height: auto;
 }
 
-.preview-crop-overlay[b-qgaegzj5sn] {
+.preview-crop-overlay {
     position: absolute;
     inset: 0;
     pointer-events: none;
 }
 
-.preview-crop-box[b-qgaegzj5sn] {
+.preview-crop-box {
     position: absolute;
     border: 2px solid #135d66;
     border-radius: 10px;
@@ -48,24 +39,24 @@
     box-shadow: 0 0 0 999px rgba(21, 23, 24, 0.26);
 }
 
-.preview-crop-hint[b-qgaegzj5sn] {
+.preview-crop-hint {
     margin: 12px 0 0;
     font-size: 0.95rem;
 }
 
-.crop-controls[b-qgaegzj5sn] {
+.crop-controls {
     display: grid;
     gap: 10px;
     margin-top: 12px;
 }
 
-.crop-summary[b-qgaegzj5sn] {
+.crop-summary {
     margin: 0;
     font-size: 0.92rem;
     color: rgba(21, 23, 24, 0.72);
 }
 
-.crop-actions[b-qgaegzj5sn] {
+.crop-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;

@@ -172,6 +172,23 @@ window.pmstools = {
       srcH = Math.max(1, Math.round(image.height * scaleValue));
       srcX = Math.max(0, Math.round((image.width - srcW) / 2));
       srcY = Math.max(0, Math.round((image.height - srcH) / 2));
+    } else if (crop && crop.mode === "normalized") {
+      const normalizedX = Math.max(0, Math.min(1, Number(crop.x) || 0));
+      const normalizedY = Math.max(0, Math.min(1, Number(crop.y) || 0));
+      const normalizedWidth = Math.max(0.01, Math.min(1, Number(crop.width) || 1));
+      const normalizedHeight = Math.max(0.01, Math.min(1, Number(crop.height) || 1));
+
+      srcX = Math.max(0, Math.round(image.width * normalizedX));
+      srcY = Math.max(0, Math.round(image.height * normalizedY));
+      srcW = Math.max(1, Math.round(image.width * normalizedWidth));
+      srcH = Math.max(1, Math.round(image.height * normalizedHeight));
+
+      if (srcX + srcW > image.width) {
+        srcW = Math.max(1, image.width - srcX);
+      }
+      if (srcY + srcH > image.height) {
+        srcH = Math.max(1, image.height - srcY);
+      }
     } else if (crop && Number.isFinite(crop.x) && Number.isFinite(crop.y) && Number.isFinite(crop.width) && Number.isFinite(crop.height)) {
       srcX = Math.max(0, Math.round(Number(crop.x)));
       srcY = Math.max(0, Math.round(Number(crop.y)));
@@ -319,8 +336,118 @@ window.pmstools = {
     } catch (error) {
       console.warn("Barcode render failed", error);
     }
-  }
-  ,
+  },
+  setupCropSelection: (function () {
+    const selectionState = new WeakMap();
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function normalizePoint(element, clientX, clientY) {
+      const rect = element.getBoundingClientRect();
+      const width = Math.max(1, rect.width);
+      const height = Math.max(1, rect.height);
+
+      return {
+        x: clamp((clientX - rect.left) / width, 0, 1),
+        y: clamp((clientY - rect.top) / height, 0, 1)
+      };
+    }
+
+    function toSelection(startPoint, currentPoint) {
+      const left = Math.min(startPoint.x, currentPoint.x);
+      const top = Math.min(startPoint.y, currentPoint.y);
+      const width = Math.abs(currentPoint.x - startPoint.x);
+      const height = Math.abs(currentPoint.y - startPoint.y);
+
+      return { left, top, width, height };
+    }
+
+    const api = function (element, dotNetRef) {
+      if (!element || !dotNetRef) {
+        return;
+      }
+
+      const existing = selectionState.get(element);
+      if (existing) {
+        existing.dispose();
+      }
+
+      let pointerId = null;
+      let startPoint = null;
+
+      const onPointerDown = function (event) {
+        if (event.button != null && event.button !== 0) {
+          return;
+        }
+
+        event.preventDefault();
+        pointerId = event.pointerId;
+        startPoint = normalizePoint(element, event.clientX, event.clientY);
+        element.setPointerCapture(pointerId);
+        dotNetRef.invokeMethodAsync("UpdateCropSelectionFromJs", startPoint.x, startPoint.y, 0.001, 0.001);
+      };
+
+      const onPointerMove = function (event) {
+        if (pointerId == null || event.pointerId !== pointerId || !startPoint) {
+          return;
+        }
+
+        event.preventDefault();
+        const currentPoint = normalizePoint(element, event.clientX, event.clientY);
+        const selection = toSelection(startPoint, currentPoint);
+        dotNetRef.invokeMethodAsync("UpdateCropSelectionFromJs", selection.left, selection.top, selection.width, selection.height);
+      };
+
+      const finishSelection = function (event) {
+        if (pointerId == null || event.pointerId !== pointerId) {
+          return;
+        }
+
+        event.preventDefault();
+        if (element.hasPointerCapture(pointerId)) {
+          element.releasePointerCapture(pointerId);
+        }
+
+        pointerId = null;
+        startPoint = null;
+      };
+
+      element.addEventListener("pointerdown", onPointerDown);
+      element.addEventListener("pointermove", onPointerMove);
+      element.addEventListener("pointerup", finishSelection);
+      element.addEventListener("pointercancel", finishSelection);
+
+      selectionState.set(element, {
+        dispose: function () {
+          element.removeEventListener("pointerdown", onPointerDown);
+          element.removeEventListener("pointermove", onPointerMove);
+          element.removeEventListener("pointerup", finishSelection);
+          element.removeEventListener("pointercancel", finishSelection);
+        }
+      });
+    };
+
+    api.destroy = function (element) {
+      if (!element) {
+        return;
+      }
+
+      const existing = selectionState.get(element);
+      if (existing) {
+        existing.dispose();
+        selectionState.delete(element);
+      }
+    };
+
+    return api;
+  })(),
+  destroyCropSelection: function (element) {
+    if (window.pmstools.setupCropSelection && typeof window.pmstools.setupCropSelection.destroy === "function") {
+      window.pmstools.setupCropSelection.destroy(element);
+    }
+  },
   closeNavMenu: function (menuId) {
     const menu = document.getElementById(menuId);
     if (menu && menu.open) {
