@@ -458,6 +458,40 @@ button, input, textarea {
     font-size: 0.75rem;
 }
 
+.camera-guide-controls {
+    margin-top: 10px;
+    display: grid;
+    gap: 8px;
+}
+
+.camera-guide-title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.camera-guide-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.camera-guide-grid {
+    display: grid;
+    gap: 8px;
+}
+
+.camera-guide-grid label {
+    display: grid;
+    gap: 4px;
+    font-size: 0.78rem;
+    color: rgba(234, 237, 240, 0.92);
+}
+
+.camera-guide-grid input[type="range"] {
+    width: 100%;
+}
+
 .ocr-preview {
     width: 100%;
     min-height: 120px;

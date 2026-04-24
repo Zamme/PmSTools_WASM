@@ -38,10 +38,37 @@
                 <div class="camera-stream-shell">
                     <video id="cameraStream" playsinline muted></video>
                     <div class="camera-guidance-overlay" aria-hidden="true">
-                        <div class="camera-guidance-box"></div>
+                        <div class="camera-guidance-box" style="@CameraGuideStyle"></div>
                     </div>
                     <div class="camera-guidance-tip">Center the code inside the guide box before capture.</div>
                     <div class="camera-status">@CameraStatus</div>
+                </div>
+                <div class="camera-guide-controls">
+                    <p class="camera-guide-title">Guide box</p>
+                    <div class="camera-guide-presets">
+                        <button class="btn-ghost" @onclick="ApplyCameraGuideNarrow" disabled="@IsBusy">Narrow</button>
+                        <button class="btn-ghost" @onclick="ApplyCameraGuideStandard" disabled="@IsBusy">Standard</button>
+                        <button class="btn-ghost" @onclick="ApplyCameraGuideWide" disabled="@IsBusy">Wide</button>
+                    </div>
+                    <div class="camera-guide-grid">
+                        <label>
+                            Left @FormatPercent(CameraGuideRect.Left)
+                            <input type="range" min="0" max="95" step="0.5" @bind="_cameraGuideLeftPercent" @bind:event="oninput" />
+                        </label>
+                        <label>
+                            Top @FormatPercent(CameraGuideRect.Top)
+                            <input type="range" min="0" max="95" step="0.5" @bind="_cameraGuideTopPercent" @bind:event="oninput" />
+                        </label>
+                        <label>
+                            Width @FormatPercent(CameraGuideRect.Width)
+                            <input type="range" min="5" max="100" step="0.5" @bind="_cameraGuideWidthPercent" @bind:event="oninput" />
+                        </label>
+                        <label>
+                            Height @FormatPercent(CameraGuideRect.Height)
+                            <input type="range" min="5" max="100" step="0.5" @bind="_cameraGuideHeightPercent" @bind:event="oninput" />
+                        </label>
+                    </div>
+                    <button class="btn-ghost" @onclick="ResetCameraGuideBox" disabled="@IsBusy">Reset guide box</button>
                 </div>
             </div>
             <div style="flex: 1 1 240px; min-width: 220px;">
@@ -334,9 +361,25 @@
     private double _cropTopPercent = 38;
     private double _cropWidthPercent = 64;
     private double _cropHeightPercent = 18;
+    private double _cameraGuideLeftPercent = 18;
+    private double _cameraGuideTopPercent = 38;
+    private double _cameraGuideWidthPercent = 64;
+    private double _cameraGuideHeightPercent = 18;
 
     private string CameraStatus => IsCameraOn ? "Camera live" : "Camera off";
+    private (double Left, double Top, double Width, double Height) CameraGuideRect
+    {
+        get
+        {
+            var left = Math.Clamp(_cameraGuideLeftPercent, 0d, 95d);
+            var top = Math.Clamp(_cameraGuideTopPercent, 0d, 95d);
+            var width = Math.Clamp(_cameraGuideWidthPercent, 0.1d, 100d - left);
+            var height = Math.Clamp(_cameraGuideHeightPercent, 0.1d, 100d - top);
+            return (left, top, width, height);
+        }
+    }
     private string CleanOcrPreview => string.Join(" ", Parser.ParseCodes(OcrText ?? string.Empty, Prefixes.Where(prefix => prefix.IsActive).Select(prefix => prefix.Value)));
+    private string CameraGuideStyle => $"left:{CameraGuideRect.Left:F2}%;top:{CameraGuideRect.Top:F2}%;width:{CameraGuideRect.Width:F2}%;height:{CameraGuideRect.Height:F2}%;";
     private string PreviewCropStyle => $"left:{CropLeftPercent:F2}%;top:{CropTopPercent:F2}%;width:{CropWidthPercent:F2}%;height:{CropHeightPercent:F2}%;";
     private string PreviewSourceLabel => LastImageComesFromFile ? "Source: File (bbox OCR)" : "Source: Camera (guide-box crop OCR)";
     private double CropLeftPercent => _cropLeftPercent;
@@ -430,15 +473,16 @@
 
         await RunOcrAsync(async () =>
         {
+            var guideRect = CameraGuideRect;
             var dataUrl = await JS.InvokeAsync<string?>("pmstools.captureFrameDataUrl", "cameraStream", new Dictionary<string, object?>
             {
                 ["crop"] = new Dictionary<string, object?>
                 {
                     ["mode"] = "normalized",
-                    ["x"] = 0.18d,
-                    ["y"] = 0.38d,
-                    ["width"] = 0.64d,
-                    ["height"] = 0.18d
+                    ["x"] = guideRect.Left / 100d,
+                    ["y"] = guideRect.Top / 100d,
+                    ["width"] = guideRect.Width / 100d,
+                    ["height"] = guideRect.Height / 100d
                 }
             });
             if (string.IsNullOrWhiteSpace(dataUrl))
@@ -572,6 +616,37 @@
     private void ResetCropSelection()
     {
         ApplyCropSelection(18d, 38d, 64d, 18d);
+    }
+
+    private void ResetCameraGuideBox()
+    {
+        _cameraGuideLeftPercent = 18d;
+        _cameraGuideTopPercent = 38d;
+        _cameraGuideWidthPercent = 64d;
+        _cameraGuideHeightPercent = 18d;
+    }
+
+    private void ApplyCameraGuideNarrow()
+    {
+        SetCameraGuideBox(28d, 35d, 44d, 20d);
+    }
+
+    private void ApplyCameraGuideStandard()
+    {
+        SetCameraGuideBox(18d, 38d, 64d, 18d);
+    }
+
+    private void ApplyCameraGuideWide()
+    {
+        SetCameraGuideBox(10d, 34d, 80d, 22d);
+    }
+
+    private void SetCameraGuideBox(double left, double top, double width, double height)
+    {
+        _cameraGuideLeftPercent = left;
+        _cameraGuideTopPercent = top;
+        _cameraGuideWidthPercent = width;
+        _cameraGuideHeightPercent = height;
     }
 
     private void ApplyCropSelection(double left, double top, double width, double height)
