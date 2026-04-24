@@ -3,6 +3,7 @@
 @inject BarcodeStorage Storage
 @inject BarcodeParser Parser
 @inject IJSRuntime JS
+@using System.Globalization
 @using Microsoft.JSInterop
 
 <section class="hero">
@@ -21,6 +22,7 @@
                     <circle cx="12" cy="12" r="6.5" />
                 </svg>
             </button>
+            <button class="btn-secondary" @onclick="BurstReadFromCameraAsync" disabled="@(!IsCameraOn || IsBusy)" title="Burst read (stability mode)">Burst read</button>
             <button class="btn-ghost icon-button" @onclick="StopCameraAsync" disabled="@(!IsCameraOn)" aria-label="Stop camera" title="Stop camera">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <rect x="7" y="7" width="10" height="10" rx="1.5" />
@@ -44,31 +46,40 @@
                     <div class="camera-status">@CameraStatus</div>
                 </div>
                 <div class="camera-guide-controls">
-                    <p class="camera-guide-title">Guide box</p>
-                    <div class="camera-guide-presets">
-                        <button class="btn-ghost" @onclick="ApplyCameraGuideNarrow" disabled="@IsBusy">Narrow</button>
-                        <button class="btn-ghost" @onclick="ApplyCameraGuideStandard" disabled="@IsBusy">Standard</button>
-                        <button class="btn-ghost" @onclick="ApplyCameraGuideWide" disabled="@IsBusy">Wide</button>
+                    <div class="panel-header-actions">
+                        <p class="camera-guide-title">Guide box settings</p>
+                        <button class="btn-ghost panel-toggle" @onclick="() => ShowCameraGuidePanel = !ShowCameraGuidePanel" aria-expanded="@ShowCameraGuidePanel" aria-controls="camera-guide-panel-body" title="Toggle guide box settings">
+                            <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M6.7 9.2 12 14.5l5.3-5.3 1.4 1.4-6.7 6.7-6.7-6.7z" />
+                            </svg>
+                        </button>
                     </div>
-                    <div class="camera-guide-grid">
-                        <label>
-                            Left @FormatPercent(CameraGuideRect.Left)
-                            <input type="range" min="0" max="95" step="0.5" @bind="_cameraGuideLeftPercent" @bind:event="oninput" />
-                        </label>
-                        <label>
-                            Top @FormatPercent(CameraGuideRect.Top)
-                            <input type="range" min="0" max="95" step="0.5" @bind="_cameraGuideTopPercent" @bind:event="oninput" />
-                        </label>
-                        <label>
-                            Width @FormatPercent(CameraGuideRect.Width)
-                            <input type="range" min="5" max="100" step="0.5" @bind="_cameraGuideWidthPercent" @bind:event="oninput" />
-                        </label>
-                        <label>
-                            Height @FormatPercent(CameraGuideRect.Height)
-                            <input type="range" min="5" max="100" step="0.5" @bind="_cameraGuideHeightPercent" @bind:event="oninput" />
-                        </label>
+                    <div id="camera-guide-panel-body" hidden="@(!ShowCameraGuidePanel)">
+                        <div class="camera-guide-presets">
+                            <button class="btn-ghost" @onclick="ApplyCameraGuideNarrow" disabled="@IsBusy">Narrow</button>
+                            <button class="btn-ghost" @onclick="ApplyCameraGuideStandard" disabled="@IsBusy">Standard</button>
+                            <button class="btn-ghost" @onclick="ApplyCameraGuideWide" disabled="@IsBusy">Wide</button>
+                        </div>
+                        <div class="camera-guide-grid">
+                            <label>
+                                Left @FormatPercent(CameraGuideRect.Left)
+                                <input type="range" min="0" max="95" step="0.5" @bind="_cameraGuideLeftPercent" @bind:event="oninput" />
+                            </label>
+                            <label>
+                                Top @FormatPercent(CameraGuideRect.Top)
+                                <input type="range" min="0" max="95" step="0.5" @bind="_cameraGuideTopPercent" @bind:event="oninput" />
+                            </label>
+                            <label>
+                                Width @FormatPercent(CameraGuideRect.Width)
+                                <input type="range" min="5" max="100" step="0.5" @bind="_cameraGuideWidthPercent" @bind:event="oninput" />
+                            </label>
+                            <label>
+                                Height @FormatPercent(CameraGuideRect.Height)
+                                <input type="range" min="5" max="100" step="0.5" @bind="_cameraGuideHeightPercent" @bind:event="oninput" />
+                            </label>
+                        </div>
+                        <button class="btn-ghost" @onclick="ResetCameraGuideBox" disabled="@IsBusy">Reset guide box</button>
                     </div>
-                    <button class="btn-ghost" @onclick="ResetCameraGuideBox" disabled="@IsBusy">Reset guide box</button>
                 </div>
             </div>
             <div style="flex: 1 1 240px; min-width: 220px;">
@@ -357,6 +368,7 @@
     private bool ShowManualPanel { get; set; }
     private bool ShowPrefixesPanel { get; set; }
     private bool ShowSavedPanel { get; set; }
+    private bool ShowCameraGuidePanel { get; set; }
     private double _cropLeftPercent = 18;
     private double _cropTopPercent = 38;
     private double _cropWidthPercent = 64;
@@ -379,8 +391,8 @@
         }
     }
     private string CleanOcrPreview => string.Join(" ", Parser.ParseCodes(OcrText ?? string.Empty, Prefixes.Where(prefix => prefix.IsActive).Select(prefix => prefix.Value)));
-    private string CameraGuideStyle => $"left:{CameraGuideRect.Left:F2}%;top:{CameraGuideRect.Top:F2}%;width:{CameraGuideRect.Width:F2}%;height:{CameraGuideRect.Height:F2}%;";
-    private string PreviewCropStyle => $"left:{CropLeftPercent:F2}%;top:{CropTopPercent:F2}%;width:{CropWidthPercent:F2}%;height:{CropHeightPercent:F2}%;";
+    private string CameraGuideStyle => $"left:{ToCssPercent(CameraGuideRect.Left)}%;top:{ToCssPercent(CameraGuideRect.Top)}%;width:{ToCssPercent(CameraGuideRect.Width)}%;height:{ToCssPercent(CameraGuideRect.Height)}%;";
+    private string PreviewCropStyle => $"left:{ToCssPercent(CropLeftPercent)}%;top:{ToCssPercent(CropTopPercent)}%;width:{ToCssPercent(CropWidthPercent)}%;height:{ToCssPercent(CropHeightPercent)}%;";
     private string PreviewSourceLabel => LastImageComesFromFile ? "Source: File (bbox OCR)" : "Source: Camera (guide-box crop OCR)";
     private double CropLeftPercent => _cropLeftPercent;
     private double CropTopPercent => _cropTopPercent;
@@ -473,18 +485,7 @@
 
         await RunOcrAsync(async () =>
         {
-            var guideRect = CameraGuideRect;
-            var dataUrl = await JS.InvokeAsync<string?>("pmstools.captureFrameDataUrl", "cameraStream", new Dictionary<string, object?>
-            {
-                ["crop"] = new Dictionary<string, object?>
-                {
-                    ["mode"] = "normalized",
-                    ["x"] = guideRect.Left / 100d,
-                    ["y"] = guideRect.Top / 100d,
-                    ["width"] = guideRect.Width / 100d,
-                    ["height"] = guideRect.Height / 100d
-                }
-            });
+            var dataUrl = await CaptureGuideFrameDataUrlAsync();
             if (string.IsNullOrWhiteSpace(dataUrl))
             {
                 throw new InvalidOperationException("Unable to capture frame.");
@@ -499,6 +500,121 @@
             ResetCropSelection();
             _cropSelectorNeedsSync = true;
             return await ReadImageAsync(dataUrl, preprocess: true, useSelectedArea: false);
+        });
+    }
+
+    private async Task BurstReadFromCameraAsync()
+    {
+        if (!IsCameraOn)
+        {
+            StatusMessage = "Start the camera first.";
+            return;
+        }
+
+        const int requiredConsensus = 3;
+        const int maxAttempts = 12;
+        const int frameIntervalMs = 500;
+
+        IsBusy = true;
+        StatusMessage = "Burst reading started. Hold the camera still.";
+
+        var lastSignature = string.Empty;
+        var currentStreak = 0;
+        string? finalText = null;
+        string? finalDataUrl = null;
+
+        try
+        {
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                var startedAt = DateTime.UtcNow;
+                var dataUrl = await CaptureGuideFrameDataUrlAsync();
+                if (string.IsNullOrWhiteSpace(dataUrl))
+                {
+                    continue;
+                }
+
+                var text = await ReadImageAsync(dataUrl, preprocess: true, useSelectedArea: false);
+                var activePrefixes = Prefixes.Where(prefix => prefix.IsActive).Select(prefix => prefix.Value);
+                var parsedCodes = Parser.ParseCodes(text ?? string.Empty, activePrefixes).ToList();
+                var signature = parsedCodes.Count > 0 ? string.Join("|", parsedCodes) : string.Empty;
+
+                if (!string.IsNullOrWhiteSpace(signature) && string.Equals(signature, lastSignature, StringComparison.OrdinalIgnoreCase))
+                {
+                    currentStreak++;
+                }
+                else if (!string.IsNullOrWhiteSpace(signature))
+                {
+                    lastSignature = signature;
+                    currentStreak = 1;
+                }
+                else
+                {
+                    currentStreak = 0;
+                }
+
+                StatusMessage = currentStreak > 0
+                    ? $"Burst read {attempt}/{maxAttempts}: stability {currentStreak}/{requiredConsensus}."
+                    : $"Burst read {attempt}/{maxAttempts}: unstable, keep still.";
+                await InvokeAsync(StateHasChanged);
+
+                if (currentStreak >= requiredConsensus)
+                {
+                    finalText = text;
+                    finalDataUrl = dataUrl;
+                    await JS.InvokeVoidAsync("pmstools.stopCamera", "cameraStream");
+                    IsCameraOn = false;
+                    break;
+                }
+
+                var elapsedMs = (int)(DateTime.UtcNow - startedAt).TotalMilliseconds;
+                var delayMs = Math.Max(0, frameIntervalMs - elapsedMs);
+                if (delayMs > 0)
+                {
+                    await Task.Delay(delayMs);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(finalText) && !string.IsNullOrWhiteSpace(finalDataUrl))
+            {
+                OcrText = finalText;
+                LastImageDataUrl = finalDataUrl;
+                LastImageComesFromFile = false;
+                LastImageUsesPreprocess = true;
+                ResetCropSelection();
+                _cropSelectorNeedsSync = true;
+
+                await RebuildFromOcrText();
+                StatusMessage = "OCR completed with burst consensus.";
+            }
+            else
+            {
+                StatusMessage = "Unable to get a stable read. Keep the camera steady and try burst read again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Burst OCR failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task<string?> CaptureGuideFrameDataUrlAsync()
+    {
+        var guideRect = CameraGuideRect;
+        return await JS.InvokeAsync<string?>("pmstools.captureFrameDataUrl", "cameraStream", new Dictionary<string, object?>
+        {
+            ["crop"] = new Dictionary<string, object?>
+            {
+                ["mode"] = "normalized",
+                ["x"] = guideRect.Left / 100d,
+                ["y"] = guideRect.Top / 100d,
+                ["width"] = guideRect.Width / 100d,
+                ["height"] = guideRect.Height / 100d
+            }
         });
     }
 
@@ -665,6 +781,11 @@
     private static string FormatPercent(double value)
     {
         return $"{value:F0}%";
+    }
+
+    private static string ToCssPercent(double value)
+    {
+        return value.ToString("F2", CultureInfo.InvariantCulture);
     }
 
     private async Task RunOcrAsync(Func<Task<string>> ocrOperation)
