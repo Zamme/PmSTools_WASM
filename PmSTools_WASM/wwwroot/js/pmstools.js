@@ -1,3 +1,82 @@
+const pmstoolsCameraProfiles = [
+  {
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 4096 },
+      height: { ideal: 2160 },
+      frameRate: { ideal: 30, max: 60 }
+    },
+    audio: false
+  },
+  {
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 }
+    },
+    audio: false
+  },
+  {
+    video: {
+      facingMode: "environment"
+    },
+    audio: false
+  }
+];
+
+async function pmstoolsGetBestCameraStream() {
+  let lastError = null;
+
+  for (const constraints of pmstoolsCameraProfiles) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Unable to access camera.");
+}
+
+async function pmstoolsApplyCameraEnhancements(track) {
+  if (!track || typeof track.applyConstraints !== "function") {
+    return;
+  }
+
+  let capabilities = null;
+  if (typeof track.getCapabilities === "function") {
+    try {
+      capabilities = track.getCapabilities();
+    } catch (error) {
+      capabilities = null;
+    }
+  }
+
+  const advanced = [];
+  const focusModes = capabilities && Array.isArray(capabilities.focusMode) ? capabilities.focusMode : [];
+  if (focusModes.includes("continuous")) {
+    advanced.push({ focusMode: "continuous" });
+  } else if (focusModes.includes("single-shot")) {
+    advanced.push({ focusMode: "single-shot" });
+  }
+
+  const constraints = {};
+  if (advanced.length > 0) {
+    constraints.advanced = advanced;
+  }
+
+  if (Object.keys(constraints).length === 0) {
+    return;
+  }
+
+  try {
+    await track.applyConstraints(constraints);
+  } catch (error) {
+    console.warn("Camera enhancement constraints not fully supported", error);
+  }
+}
+
 window.pmstools = {
   loadTesseract: (function () {
     let loadPromise = null;
@@ -99,10 +178,15 @@ window.pmstools = {
       return false;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" },
-      audio: false
-    });
+    if (video.srcObject) {
+      const previousTracks = video.srcObject.getTracks ? video.srcObject.getTracks() : [];
+      previousTracks.forEach((track) => track.stop());
+      video.srcObject = null;
+    }
+
+    const stream = await pmstoolsGetBestCameraStream();
+    const [videoTrack] = stream.getVideoTracks();
+    await pmstoolsApplyCameraEnhancements(videoTrack);
 
     video.srcObject = stream;
     await video.play();
@@ -119,7 +203,7 @@ window.pmstools = {
     tracks.forEach(track => track.stop());
     video.srcObject = null;
   },
-  captureFrameDataUrl: function (videoId) {
+  captureFrameDataUrl: function (videoId, options) {
     const video = document.getElementById(videoId);
     if (!video) {
       return null;
@@ -127,15 +211,50 @@ window.pmstools = {
 
     const width = video.videoWidth || 1280;
     const height = video.videoHeight || 720;
+    let sx = 0;
+    let sy = 0;
+    let sw = width;
+    let sh = height;
+
+    const crop = options && options.crop ? options.crop : null;
+    if (crop) {
+      const mode = crop.mode === "normalized" ? "normalized" : "pixels";
+      if (mode === "normalized") {
+        sx = Number(crop.x) * width;
+        sy = Number(crop.y) * height;
+        sw = Number(crop.width) * width;
+        sh = Number(crop.height) * height;
+      } else {
+        sx = Number(crop.x);
+        sy = Number(crop.y);
+        sw = Number(crop.width);
+        sh = Number(crop.height);
+      }
+
+      if (!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(sw) || !Number.isFinite(sh)) {
+        sx = 0;
+        sy = 0;
+        sw = width;
+        sh = height;
+      }
+
+      sx = Math.min(Math.max(0, sx), Math.max(0, width - 1));
+      sy = Math.min(Math.max(0, sy), Math.max(0, height - 1));
+      sw = Math.min(Math.max(1, sw), width - sx);
+      sh = Math.min(Math.max(1, sh), height - sy);
+    }
+
+    const targetWidth = Math.max(1, Math.round(sw));
+    const targetHeight = Math.max(1, Math.round(sh));
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       return null;
     }
 
-    ctx.drawImage(video, 0, 0, width, height);
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
     return canvas.toDataURL("image/png");
   },
   loadOpenCv: (function () {

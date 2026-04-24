@@ -1,0 +1,65 @@
+.preview-selection-card {
+    margin-top: 12px;
+}
+
+.preview-crop-shell {
+    position: relative;
+    margin-top: 8px;
+    border: 1px solid rgba(21, 23, 24, 0.12);
+    border-radius: 12px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 246, 247, 0.92));
+    cursor: crosshair;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.preview-crop-shell.camera-preview-mode {
+    cursor: default;
+    touch-action: auto;
+}
+
+.preview-crop-image {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.preview-crop-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.preview-crop-box {
+    position: absolute;
+    border: 2px solid #135d66;
+    border-radius: 10px;
+    background: rgba(19, 93, 102, 0.16);
+    box-shadow: 0 0 0 999px rgba(21, 23, 24, 0.26);
+}
+
+.preview-crop-hint {
+    margin: 12px 0 0;
+    font-size: 0.95rem;
+}
+
+.crop-controls {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.crop-summary {
+    margin: 0;
+    font-size: 0.92rem;
+    color: rgba(21, 23, 24, 0.72);
+}
+
+.crop-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}

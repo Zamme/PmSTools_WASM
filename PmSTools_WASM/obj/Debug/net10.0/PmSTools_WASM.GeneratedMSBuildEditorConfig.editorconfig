@@ -36,10 +36,6 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ3JlYXRlUm91dGUucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
-[/mnt/e6bd685b-f931-4b61-8806-5cb11171222b/Github/PmSTools_WASM/PmSTools_WASM/Pages/FindAddress.razor]
-build_metadata.AdditionalFiles.TargetPath = UGFnZXMvRmluZEFkZHJlc3MucmF6b3I=
-build_metadata.AdditionalFiles.CssScope = 
-
 [/mnt/e6bd685b-f931-4b61-8806-5cb11171222b/Github/PmSTools_WASM/PmSTools_WASM/Pages/Home.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXMvSG9tZS5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
@@ -63,3 +59,7 @@ build_metadata.AdditionalFiles.CssScope = b-owt3epk5gd
 [/mnt/e6bd685b-f931-4b61-8806-5cb11171222b/Github/PmSTools_WASM/PmSTools_WASM/Pages/Code2Barcode.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXMvQ29kZTJCYXJjb2RlLnJhem9y
 build_metadata.AdditionalFiles.CssScope = b-qgaegzj5sn
+
+[/mnt/e6bd685b-f931-4b61-8806-5cb11171222b/Github/PmSTools_WASM/PmSTools_WASM/Pages/FindAddress.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXMvRmluZEFkZHJlc3MucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-idrf0y4tz8

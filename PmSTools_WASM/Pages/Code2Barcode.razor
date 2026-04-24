@@ -35,8 +35,14 @@
     <div class="camera-box">
         <div style="display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;">
             <div style="flex: 1 1 240px; min-width: 220px;">
-                <video id="cameraStream" playsinline muted></video>
-                <div class="camera-status">@CameraStatus</div>
+                <div class="camera-stream-shell">
+                    <video id="cameraStream" playsinline muted></video>
+                    <div class="camera-guidance-overlay" aria-hidden="true">
+                        <div class="camera-guidance-box"></div>
+                    </div>
+                    <div class="camera-guidance-tip">Center the code inside the guide box before capture.</div>
+                    <div class="camera-status">@CameraStatus</div>
+                </div>
             </div>
             <div style="flex: 1 1 240px; min-width: 220px;">
                 @if (!string.IsNullOrWhiteSpace(LastImageDataUrl))
@@ -59,7 +65,7 @@
                         }
                         else
                         {
-                            <p class="preview-crop-hint">Camera captures are always processed using the full image.</p>
+                            <p class="preview-crop-hint">Camera captures are processed using the guide-box crop area.</p>
                         }
                         <div class="crop-controls">
                             @if (LastImageComesFromFile)
@@ -332,7 +338,7 @@
     private string CameraStatus => IsCameraOn ? "Camera live" : "Camera off";
     private string CleanOcrPreview => string.Join(" ", Parser.ParseCodes(OcrText ?? string.Empty, Prefixes.Where(prefix => prefix.IsActive).Select(prefix => prefix.Value)));
     private string PreviewCropStyle => $"left:{CropLeftPercent:F2}%;top:{CropTopPercent:F2}%;width:{CropWidthPercent:F2}%;height:{CropHeightPercent:F2}%;";
-    private string PreviewSourceLabel => LastImageComesFromFile ? "Source: File (bbox OCR)" : "Source: Camera (full OCR)";
+    private string PreviewSourceLabel => LastImageComesFromFile ? "Source: File (bbox OCR)" : "Source: Camera (guide-box crop OCR)";
     private double CropLeftPercent => _cropLeftPercent;
     private double CropTopPercent => _cropTopPercent;
     private double CropWidthPercent => _cropWidthPercent;
@@ -395,7 +401,7 @@
         {
             var started = await JS.InvokeAsync<bool>("pmstools.startCamera", "cameraStream");
             IsCameraOn = started;
-            StatusMessage = started ? "Camera ready. Aim at the label." : "Camera not available in this browser.";
+            StatusMessage = started ? "Camera ready. Center the code inside the guide box." : "Camera not available in this browser.";
         }
         catch (Exception ex)
         {
@@ -424,7 +430,17 @@
 
         await RunOcrAsync(async () =>
         {
-            var dataUrl = await JS.InvokeAsync<string?>("pmstools.captureFrameDataUrl", "cameraStream");
+            var dataUrl = await JS.InvokeAsync<string?>("pmstools.captureFrameDataUrl", "cameraStream", new Dictionary<string, object?>
+            {
+                ["crop"] = new Dictionary<string, object?>
+                {
+                    ["mode"] = "normalized",
+                    ["x"] = 0.18d,
+                    ["y"] = 0.38d,
+                    ["width"] = 0.64d,
+                    ["height"] = 0.18d
+                }
+            });
             if (string.IsNullOrWhiteSpace(dataUrl))
             {
                 throw new InvalidOperationException("Unable to capture frame.");
