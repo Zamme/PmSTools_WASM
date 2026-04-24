@@ -22,7 +22,22 @@
                     <circle cx="12" cy="12" r="6.5" />
                 </svg>
             </button>
-            <button class="btn-secondary" @onclick="BurstReadFromCameraAsync" disabled="@(!IsCameraOn || IsBusy)" title="Burst read (stability mode)">Burst read</button>
+            <button class="btn-secondary icon-button" @onclick="ToggleBurstReadAsync" disabled="@(!IsCameraOn || (IsBusy && !IsBurstReading))" aria-label="@(IsBurstReading ? "Stop burst read" : "Burst read")" title="@(IsBurstReading ? "Stop burst read" : "Burst read (stability mode)")">
+                @if (IsBurstReading)
+                {
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <rect x="7" y="7" width="10" height="10" rx="1.5" />
+                    </svg>
+                }
+                else
+                {
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <circle cx="12" cy="12" r="3" />
+                        <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8" />
+                        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="4 3" />
+                    </svg>
+                }
+            </button>
             <button class="btn-ghost icon-button" @onclick="StopCameraAsync" disabled="@(!IsCameraOn)" aria-label="Stop camera" title="Stop camera">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <rect x="7" y="7" width="10" height="10" rx="1.5" />
@@ -360,8 +375,10 @@
     private bool IsCameraOn { get; set; }
     private bool LastImageComesFromFile { get; set; }
     private bool LastImageUsesPreprocess { get; set; }
+    private bool IsBurstReading { get; set; }
     private ElementReference PreviewCropShell { get; set; }
     private DotNetObjectReference<Code2Barcode>? _dotNetReference;
+    private CancellationTokenSource? _burstReadCts;
     private bool _cropSelectorNeedsSync;
     private bool _needsBarcodeRender;
     private bool ShowOcrPanel { get; set; }
@@ -470,9 +487,32 @@
 
     private async Task StopCameraAsync()
     {
+        StopBurstRead();
         await JS.InvokeVoidAsync("pmstools.stopCamera", "cameraStream");
         IsCameraOn = false;
         StatusMessage = "Camera stopped.";
+    }
+
+    private Task ToggleBurstReadAsync()
+    {
+        if (IsBurstReading)
+        {
+            StopBurstRead();
+            return Task.CompletedTask;
+        }
+
+        return BurstReadFromCameraAsync();
+    }
+
+    private void StopBurstRead()
+    {
+        if (!IsBurstReading)
+        {
+            return;
+        }
+
+        _burstReadCts?.Cancel();
+        StatusMessage = "Stopping burst read...";
     }
 
     private async Task CaptureFromCameraAsync()
@@ -511,11 +551,20 @@
             return;
         }
 
+        if (IsBurstReading)
+        {
+            return;
+        }
+
         const int requiredConsensus = 3;
         const int maxAttempts = 12;
         const int frameIntervalMs = 500;
 
+        _burstReadCts = new CancellationTokenSource();
+        var cancellationToken = _burstReadCts.Token;
+
         IsBusy = true;
+        IsBurstReading = true;
         StatusMessage = "Burst reading started. Hold the camera still.";
 
         var lastSignature = string.Empty;
@@ -527,6 +576,14 @@
         {
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var isCameraRunning = await JS.InvokeAsync<bool>("pmstools.isCameraRunning", "cameraStream");
+                if (!isCameraRunning)
+                {
+                    throw new OperationCanceledException("Camera is no longer running.", cancellationToken);
+                }
+
                 var startedAt = DateTime.UtcNow;
                 var dataUrl = await CaptureGuideFrameDataUrlAsync();
                 if (string.IsNullOrWhiteSpace(dataUrl))
@@ -571,7 +628,7 @@
                 var delayMs = Math.Max(0, frameIntervalMs - elapsedMs);
                 if (delayMs > 0)
                 {
-                    await Task.Delay(delayMs);
+                    await Task.Delay(delayMs, cancellationToken);
                 }
             }
 
@@ -592,13 +649,20 @@
                 StatusMessage = "Unable to get a stable read. Keep the camera steady and try burst read again.";
             }
         }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Burst read stopped.";
+        }
         catch (Exception ex)
         {
             StatusMessage = $"Burst OCR failed: {ex.Message}";
         }
         finally
         {
+            IsBurstReading = false;
             IsBusy = false;
+            _burstReadCts?.Dispose();
+            _burstReadCts = null;
         }
     }
 

@@ -203,6 +203,15 @@ window.pmstools = {
     tracks.forEach(track => track.stop());
     video.srcObject = null;
   },
+  isCameraRunning: function (videoId) {
+    const video = document.getElementById(videoId);
+    if (!video || !video.srcObject || !video.srcObject.getVideoTracks) {
+      return false;
+    }
+
+    const tracks = video.srcObject.getVideoTracks();
+    return tracks.some((track) => track.readyState === "live" && track.enabled !== false);
+  },
   captureFrameDataUrl: function (videoId, options) {
     const video = document.getElementById(videoId);
     if (!video) {
