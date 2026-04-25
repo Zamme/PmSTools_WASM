@@ -390,10 +390,10 @@
     private double _cropTopPercent = 38;
     private double _cropWidthPercent = 64;
     private double _cropHeightPercent = 18;
-    private double _cameraGuideLeftPercent = 18;
-    private double _cameraGuideTopPercent = 38;
-    private double _cameraGuideWidthPercent = 64;
-    private double _cameraGuideHeightPercent = 18;
+    private double _cameraGuideLeftPercent = 10;
+    private double _cameraGuideTopPercent = 34;
+    private double _cameraGuideWidthPercent = 80;
+    private double _cameraGuideHeightPercent = 22;
 
     private string CameraStatus => IsCameraOn ? "Camera live" : "Camera off";
     private (double Left, double Top, double Width, double Height) CameraGuideRect
@@ -558,7 +558,6 @@
 
         const int requiredConsensus = 3;
         const int maxAttempts = 12;
-        const int frameIntervalMs = 500;
 
         _burstReadCts = new CancellationTokenSource();
         var cancellationToken = _burstReadCts.Token;
@@ -584,7 +583,6 @@
                     throw new OperationCanceledException("Camera is no longer running.", cancellationToken);
                 }
 
-                var startedAt = DateTime.UtcNow;
                 var dataUrl = await CaptureGuideFrameDataUrlAsync();
                 if (string.IsNullOrWhiteSpace(dataUrl))
                 {
@@ -624,12 +622,8 @@
                     break;
                 }
 
-                var elapsedMs = (int)(DateTime.UtcNow - startedAt).TotalMilliseconds;
-                var delayMs = Math.Max(0, frameIntervalMs - elapsedMs);
-                if (delayMs > 0)
-                {
-                    await Task.Delay(delayMs, cancellationToken);
-                }
+                // Start the next capture as soon as OCR for the current frame completes.
+                await Task.Yield();
             }
 
             if (!string.IsNullOrWhiteSpace(finalText) && !string.IsNullOrWhiteSpace(finalDataUrl))
@@ -800,10 +794,10 @@
 
     private void ResetCameraGuideBox()
     {
-        _cameraGuideLeftPercent = 18d;
-        _cameraGuideTopPercent = 38d;
-        _cameraGuideWidthPercent = 64d;
-        _cameraGuideHeightPercent = 18d;
+        _cameraGuideLeftPercent = 10d;
+        _cameraGuideTopPercent = 34d;
+        _cameraGuideWidthPercent = 80d;
+        _cameraGuideHeightPercent = 22d;
     }
 
     private void ApplyCameraGuideNarrow()
