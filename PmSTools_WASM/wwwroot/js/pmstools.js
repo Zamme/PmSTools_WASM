@@ -1,5 +1,5 @@
 const pmstoolsCameraProfiles = [
-  {
+/*   {
     video: {
       facingMode: { ideal: "environment" },
       width: { ideal: 4096 },
@@ -7,7 +7,7 @@ const pmstoolsCameraProfiles = [
       frameRate: { ideal: 30, max: 60 }
     },
     audio: false
-  },
+  }, */
   {
     video: {
       facingMode: { ideal: "environment" },
@@ -39,7 +39,7 @@ async function pmstoolsGetBestCameraStream() {
   throw lastError || new Error("Unable to access camera.");
 }
 
-async function pmstoolsApplyCameraEnhancements(track) {
+async function pmstoolsApplyCameraEnhancements(track, options) {
   if (!track || typeof track.applyConstraints !== "function") {
     return;
   }
@@ -54,11 +54,15 @@ async function pmstoolsApplyCameraEnhancements(track) {
   }
 
   const advanced = [];
+  const focusPreference = options && typeof options.focusPreference === "string"
+    ? options.focusPreference.toLowerCase()
+    : "continuous";
   const focusModes = capabilities && Array.isArray(capabilities.focusMode) ? capabilities.focusMode : [];
-  if (focusModes.includes("continuous")) {
-    advanced.push({ focusMode: "continuous" });
-  } else if (focusModes.includes("single-shot")) {
+
+  if (focusPreference === "single-shot" && focusModes.includes("single-shot")) {
     advanced.push({ focusMode: "single-shot" });
+  } else if (focusPreference === "continuous" && focusModes.includes("continuous")) {
+    advanced.push({ focusMode: "continuous" });
   }
 
   const constraints = {};
@@ -76,6 +80,121 @@ async function pmstoolsApplyCameraEnhancements(track) {
     console.warn("Camera enhancement constraints not fully supported", error);
   }
 }
+
+const pmstoolsBurstModeOriginalConstraints = new WeakMap();
+
+async function pmstoolsSetCameraBurstMode(track, enabled) {
+  if (!track || typeof track.applyConstraints !== "function") {
+    return;
+  }
+
+  if (enabled) {
+    if (!pmstoolsBurstModeOriginalConstraints.has(track) && typeof track.getConstraints === "function") {
+      try {
+        pmstoolsBurstModeOriginalConstraints.set(track, track.getConstraints());
+      } catch {
+        // Ignore constraint snapshot failures on partially supported browsers.
+      }
+    }
+
+    try {
+      await track.applyConstraints({
+        width: { ideal: 1280, max: 1280 },
+        height: { ideal: 720, max: 720 },
+        frameRate: { ideal: 30, max: 30 }
+      });
+      return;
+    } catch {
+      // Fall back to softer constraints for browsers that reject strict max values.
+    }
+
+    try {
+      await track.applyConstraints({
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 24 }
+      });
+    } catch (error) {
+      console.warn("Unable to apply burst camera constraints", error);
+    }
+
+    return;
+  }
+
+  const previousConstraints = pmstoolsBurstModeOriginalConstraints.get(track);
+  pmstoolsBurstModeOriginalConstraints.delete(track);
+
+  if (previousConstraints && Object.keys(previousConstraints).length > 0) {
+    try {
+      await track.applyConstraints(previousConstraints);
+      return;
+    } catch {
+      // Fall through to baseline restore constraints.
+    }
+  }
+
+  try {
+    await track.applyConstraints({
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 }
+    });
+  } catch (error) {
+    console.warn("Unable to restore camera constraints after burst mode", error);
+  }
+}
+
+const pmstoolsLoadTesseractWorker = (async function () {
+  const workerPromises = new Map();
+
+  return async function (lang) {
+    if (!window.Tesseract || !window.Tesseract.createWorker) {
+      return null;
+    }
+
+    const language = lang || "eng";
+    if (!workerPromises.has(language)) {
+      workerPromises.set(language, (async () => {
+        const worker = await window.Tesseract.createWorker({
+          logger: () => {}
+        });
+        await worker.loadLanguage(language);
+        await worker.initialize(language);
+        return worker;
+      })());
+    }
+
+    return workerPromises.get(language);
+  };
+})();
+
+const pmstoolsPrewarmBurstOcr = (async function () {
+  const warmupPromises = new Map();
+
+  return async function (lang, includeOpenCv) {
+    const language = lang || "eng";
+    const key = `${language}|${includeOpenCv ? "opencv" : "no-opencv"}`;
+
+    if (!warmupPromises.has(key)) {
+      warmupPromises.set(key, (async () => {
+        const loaded = await window.pmstools.loadTesseract();
+        if (!loaded) {
+          return false;
+        }
+
+        await pmstoolsLoadTesseractWorker(language);
+
+        if (includeOpenCv) {
+          await window.pmstools.loadOpenCv();
+        }
+
+        return true;
+      })());
+    }
+
+    return warmupPromises.get(key);
+  };
+})();
 
 window.pmstools = {
   loadTesseract: (function () {
@@ -172,7 +291,7 @@ window.pmstools = {
       return false;
     }
   },
-  startCamera: async function (videoId) {
+  startCamera: async function (videoId, options) {
     const video = document.getElementById(videoId);
     if (!video || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       return false;
@@ -186,7 +305,7 @@ window.pmstools = {
 
     const stream = await pmstoolsGetBestCameraStream();
     const [videoTrack] = stream.getVideoTracks();
-    await pmstoolsApplyCameraEnhancements(videoTrack);
+    await pmstoolsApplyCameraEnhancements(videoTrack, options);
 
     video.srcObject = stream;
     await video.play();
@@ -211,6 +330,20 @@ window.pmstools = {
 
     const tracks = video.srcObject.getVideoTracks();
     return tracks.some((track) => track.readyState === "live" && track.enabled !== false);
+  },
+  setCameraBurstMode: async function (videoId, enabled) {
+    const video = document.getElementById(videoId);
+    if (!video || !video.srcObject || !video.srcObject.getVideoTracks) {
+      return false;
+    }
+
+    const [track] = video.srcObject.getVideoTracks();
+    if (!track || track.readyState !== "live") {
+      return false;
+    }
+
+    await pmstoolsSetCameraBurstMode(track, !!enabled);
+    return true;
   },
   captureFrameDataUrl: function (videoId, options) {
     const video = document.getElementById(videoId);
@@ -264,7 +397,7 @@ window.pmstools = {
     }
 
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
-    return canvas.toDataURL("image/png");
+    return canvas.toDataURL("image/jpg", 0.9);
   },
   loadOpenCv: (function () {
     let loadPromise = null;
@@ -337,6 +470,7 @@ window.pmstools = {
   preprocessDataUrl: async function (dataUrl, options) {
     const opts = Object.assign({
       preprocess: true,
+      useOpenCv: true,
       maxDim: 1600,
       grayscale: true,
       adaptiveThreshold: true,
@@ -417,7 +551,7 @@ window.pmstools = {
 
     ctx.drawImage(image, srcX, srcY, srcW, srcH, 0, 0, width, height);
 
-    const openCvReady = await window.pmstools.loadOpenCv();
+    const openCvReady = !!opts.useOpenCv && await window.pmstools.loadOpenCv();
     if (openCvReady) {
       let src = null;
       let gray = null;
@@ -472,7 +606,7 @@ window.pmstools = {
         window.cv.cvtColor(morph, rgba, window.cv.COLOR_GRAY2RGBA, 0);
         window.cv.imshow(canvas, rgba);
 
-        return canvas.toDataURL("image/png");
+        return canvas.toDataURL("image/jpeg", 0.9);
       } catch (error) {
         console.warn("OpenCV preprocessing failed; falling back to canvas pipeline", error);
       } finally {
@@ -488,7 +622,7 @@ window.pmstools = {
     }
 
     if (!opts.grayscale && (opts.threshold == null || opts.contrast == null)) {
-      return canvas.toDataURL("image/png");
+      return canvas.toDataURL("image/jpeg", 0.9);
     }
 
     const imageData = ctx.getImageData(0, 0, width, height);
@@ -514,7 +648,7 @@ window.pmstools = {
     }
 
     ctx.putImageData(imageData, 0, 0);
-    return canvas.toDataURL("image/png");
+    return canvas.toDataURL("image/jpeg", 0.9);
   },
   ocrFromDataUrl: async function (dataUrl, options) {
     if (!dataUrl) {
@@ -542,49 +676,92 @@ window.pmstools = {
       config.user_defined_dpi = String(options.dpi);
     }
 
-    if (window.Tesseract && window.Tesseract.recognize) {
-      const result = await window.Tesseract.recognize(preparedDataUrl, lang, config);
-      return (result && result.data && result.data.text) ? result.data.text : "";
-    }
-
     if (window.Tesseract && window.Tesseract.createWorker) {
-      const worker = await window.pmstools.loadTesseractWorker(lang);
+      const loadWorker = typeof pmstoolsLoadTesseractWorker === "function"
+        ? pmstoolsLoadTesseractWorker
+        : (window.pmstools && typeof window.pmstools.loadTesseractWorker === "function"
+          ? window.pmstools.loadTesseractWorker
+          : null);
+
+      if (!loadWorker) {
+        const result = await window.Tesseract.recognize(preparedDataUrl, lang, config);
+        return (result && result.data && result.data.text) ? result.data.text : "";
+      }
+
+      const worker = await loadWorker(lang);
       if (!worker) {
         throw new Error("Tesseract worker failed to initialize");
       }
 
       if (Object.keys(config).length > 0) {
-        await worker.setParameters(config);
+        const configSignature = JSON.stringify(Object.keys(config).sort().map((key) => [key, config[key]]));
+        if (worker.__pmstoolsConfigSignature !== configSignature) {
+          await worker.setParameters(config);
+          worker.__pmstoolsConfigSignature = configSignature;
+        }
       }
 
       const result = await worker.recognize(preparedDataUrl);
       return (result && result.data && result.data.text) ? result.data.text : "";
     }
 
+    if (window.Tesseract && window.Tesseract.recognize) {
+      const result = await window.Tesseract.recognize(preparedDataUrl, lang, config);
+      return (result && result.data && result.data.text) ? result.data.text : "";
+    }
+
     throw new Error("Tesseract not available in this browser");
   },
-  loadTesseractWorker: (async function () {
-    const workerPromises = new Map();
+  ocrFromVideo: async function (videoId, captureOptions, ocrOptions) {
+    const dataUrl = window.pmstools.captureFrameDataUrl(videoId, captureOptions);
+    if (!dataUrl) {
+      return { text: "", dataUrl: null };
+    }
 
-    return async function (lang) {
-      if (!window.Tesseract || !window.Tesseract.createWorker) {
-        return null;
+    const text = await window.pmstools.ocrFromDataUrl(dataUrl, ocrOptions || {});
+    const includeDataUrl = !!(captureOptions && captureOptions.includeDataUrl);
+
+    if (includeDataUrl) {
+      return { text: text || "", dataUrl: dataUrl };
+    }
+
+    return { text: text || "", dataUrl: null };
+  },
+  ocrFromVideoWithFallback: async function (videoId, captureOptions, fastOcrOptions, fallbackOcrOptions, fallbackMinAlphaNumeric) {
+    const dataUrl = window.pmstools.captureFrameDataUrl(videoId, captureOptions);
+    if (!dataUrl) {
+      return { text: "", dataUrl: null, usedFallback: false };
+    }
+
+    const countAlphaNumeric = function (value) {
+      if (!value) {
+        return 0;
       }
 
-      const language = lang || "eng";
-      if (!workerPromises.has(language)) {
-        workerPromises.set(language, (async () => {
-          const worker = await window.Tesseract.createWorker({
-            logger: () => {}
-          });
-          await worker.loadLanguage(language);
-          await worker.initialize(language);
-          return worker;
-        })());
-      }
-      return workerPromises.get(language);
+      const matches = String(value).match(/[A-Za-z0-9]/g);
+      return matches ? matches.length : 0;
     };
-  })(),
+
+    let text = await window.pmstools.ocrFromDataUrl(dataUrl, fastOcrOptions || {});
+    let usedFallback = false;
+    const minAlphaNumeric = Number.isFinite(Number(fallbackMinAlphaNumeric)) ? Number(fallbackMinAlphaNumeric) : 6;
+
+    if (countAlphaNumeric(text) < minAlphaNumeric) {
+      text = await window.pmstools.ocrFromDataUrl(dataUrl, fallbackOcrOptions || {});
+      usedFallback = true;
+    }
+
+    const includeDataUrl = !!(captureOptions && captureOptions.includeDataUrl);
+    return {
+      text: text || "",
+      dataUrl: includeDataUrl ? dataUrl : null,
+      usedFallback: usedFallback
+    };
+  },
+  loadTesseractWorker: pmstoolsLoadTesseractWorker,
+  prewarmBurstOcr: async function (lang, includeOpenCv) {
+    await pmstoolsPrewarmBurstOcr(lang, !!includeOpenCv);
+  },
   renderBarcode: function (svgId, value) {
     const svg = document.getElementById(svgId);
     if (!svg || !value) {

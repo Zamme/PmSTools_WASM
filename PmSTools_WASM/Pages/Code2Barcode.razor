@@ -11,11 +11,20 @@
         <h1>Code to Barcode</h1>
         <p>Capture a label, extract codes, and print clean barcodes in one pass. Works with camera or file uploads.</p>
         <div class="hero-cta">
-            <button class="btn-primary icon-button" @onclick="StartCameraAsync" disabled="@IsBusy" aria-label="Start camera" title="Start camera">
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M7 7h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3zm2-3h6l2 2h-10l2-2z" />
-                    <circle cx="12" cy="13" r="3.25" />
-                </svg>
+            <button class="btn-primary icon-button" @onclick="ToggleCameraAsync" disabled="@IsBusy" aria-label="@(IsCameraOn ? "Stop camera" : "Start camera")" title="@(IsCameraOn ? "Stop camera" : "Start camera")">
+                @if (IsCameraOn)
+                {
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <rect x="7" y="7" width="10" height="10" rx="1.5" />
+                    </svg>
+                }
+                else
+                {
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M7 7h10a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3zm2-3h6l2 2h-10l2-2z" />
+                        <circle cx="12" cy="13" r="3.25" />
+                    </svg>
+                }
             </button>
             <button class="btn-secondary icon-button" @onclick="CaptureFromCameraAsync" disabled="@(!IsCameraOn || IsBusy)" aria-label="Capture and read" title="Capture and read">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -37,11 +46,6 @@
                         <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="4 3" />
                     </svg>
                 }
-            </button>
-            <button class="btn-ghost icon-button" @onclick="StopCameraAsync" disabled="@(!IsCameraOn)" aria-label="Stop camera" title="Stop camera">
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <rect x="7" y="7" width="10" height="10" rx="1.5" />
-                </svg>
             </button>
         </div>
         @if (!string.IsNullOrWhiteSpace(StatusMessage))
@@ -70,6 +74,10 @@
                         </button>
                     </div>
                     <div id="camera-guide-panel-body" hidden="@(!ShowCameraGuidePanel)">
+                        <label class="focus-toggle">
+                            <input type="checkbox" @bind="UseContinuousFocus" disabled="@IsBusy" />
+                            <span>Use continuous focus</span>
+                        </label>
                         <div class="camera-guide-presets">
                             <button class="btn-ghost" @onclick="ApplyCameraGuideNarrow" disabled="@IsBusy">Narrow</button>
                             <button class="btn-ghost" @onclick="ApplyCameraGuideStandard" disabled="@IsBusy">Standard</button>
@@ -218,6 +226,12 @@
         <div class="panel-body" id="ocr-panel-body" hidden="@(!ShowOcrPanel)">
             <p>Upload a photo if the camera is unavailable. We will run OCR in-browser.</p>
             <div class="stack">
+                <div class="input-row">
+                    <span class="badge">OCR mode</span>
+                    <button class="@(UseFastOcrMode ? "btn-primary" : "btn-ghost")" @onclick="() => SetOcrMode(true)" disabled="@IsBusy">Fast</button>
+                    <button class="@(!UseFastOcrMode ? "btn-primary" : "btn-ghost")" @onclick="() => SetOcrMode(false)" disabled="@IsBusy">Accurate</button>
+                </div>
+                <p class="preview-crop-hint">@OcrModeSummary</p>
                 <InputFile OnChange="HandleFileSelected" accept="image/*" />
                 @if (IsBusy)
                 {
@@ -373,12 +387,15 @@
     private string? LastImageDataUrl { get; set; }
     private bool IsBusy { get; set; }
     private bool IsCameraOn { get; set; }
+    private bool UseContinuousFocus { get; set; } = true;
     private bool LastImageComesFromFile { get; set; }
     private bool LastImageUsesPreprocess { get; set; }
+    private bool UseFastOcrMode { get; set; } = true;
     private bool IsBurstReading { get; set; }
     private ElementReference PreviewCropShell { get; set; }
     private DotNetObjectReference<Code2Barcode>? _dotNetReference;
     private CancellationTokenSource? _burstReadCts;
+    private Task? _burstWarmupTask;
     private bool _cropSelectorNeedsSync;
     private bool _needsBarcodeRender;
     private bool ShowOcrPanel { get; set; }
@@ -390,10 +407,10 @@
     private double _cropTopPercent = 38;
     private double _cropWidthPercent = 64;
     private double _cropHeightPercent = 18;
-    private double _cameraGuideLeftPercent = 10;
+    private double _cameraGuideLeftPercent = 5;
     private double _cameraGuideTopPercent = 34;
-    private double _cameraGuideWidthPercent = 80;
-    private double _cameraGuideHeightPercent = 22;
+    private double _cameraGuideWidthPercent = 90;
+    private double _cameraGuideHeightPercent = 35;
 
     private string CameraStatus => IsCameraOn ? "Camera live" : "Camera off";
     private (double Left, double Top, double Width, double Height) CameraGuideRect
@@ -411,10 +428,19 @@
     private string CameraGuideStyle => $"left:{ToCssPercent(CameraGuideRect.Left)}%;top:{ToCssPercent(CameraGuideRect.Top)}%;width:{ToCssPercent(CameraGuideRect.Width)}%;height:{ToCssPercent(CameraGuideRect.Height)}%;";
     private string PreviewCropStyle => $"left:{ToCssPercent(CropLeftPercent)}%;top:{ToCssPercent(CropTopPercent)}%;width:{ToCssPercent(CropWidthPercent)}%;height:{ToCssPercent(CropHeightPercent)}%;";
     private string PreviewSourceLabel => LastImageComesFromFile ? "Source: File (bbox OCR)" : "Source: Camera (guide-box crop OCR)";
+    private string OcrModeSummary => UseFastOcrMode
+        ? "Fast mode: quickest scans with minimal preprocessing."
+        : "Accurate mode: slower scans with stronger preprocessing and fallback OCR.";
     private double CropLeftPercent => _cropLeftPercent;
     private double CropTopPercent => _cropTopPercent;
     private double CropWidthPercent => _cropWidthPercent;
     private double CropHeightPercent => _cropHeightPercent;
+
+    private sealed class BurstOcrResult
+    {
+        public string? Text { get; set; }
+        public string? DataUrl { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -471,9 +497,17 @@
         IsBusy = true;
         try
         {
-            var started = await JS.InvokeAsync<bool>("pmstools.startCamera", "cameraStream");
+            var started = await JS.InvokeAsync<bool>("pmstools.startCamera", "cameraStream", new Dictionary<string, object?>
+            {
+                ["focusPreference"] = UseContinuousFocus ? "continuous" : "none"
+            });
             IsCameraOn = started;
             StatusMessage = started ? "Camera ready. Center the code inside the guide box." : "Camera not available in this browser.";
+
+            if (started)
+            {
+                EnsureBurstWarmupStarted();
+            }
         }
         catch (Exception ex)
         {
@@ -491,6 +525,11 @@
         await JS.InvokeVoidAsync("pmstools.stopCamera", "cameraStream");
         IsCameraOn = false;
         StatusMessage = "Camera stopped.";
+    }
+
+    private Task ToggleCameraAsync()
+    {
+        return IsCameraOn ? StopCameraAsync() : StartCameraAsync();
     }
 
     private Task ToggleBurstReadAsync()
@@ -536,10 +575,10 @@
 
             LastImageDataUrl = dataUrl;
             LastImageComesFromFile = false;
-            LastImageUsesPreprocess = true;
+            LastImageUsesPreprocess = !UseFastOcrMode;
             ResetCropSelection();
             _cropSelectorNeedsSync = true;
-            return await ReadImageAsync(dataUrl, preprocess: true, useSelectedArea: false);
+            return await ReadImageAsync(dataUrl, preprocess: !UseFastOcrMode, useSelectedArea: false);
         });
     }
 
@@ -556,8 +595,8 @@
             return;
         }
 
-        const int requiredConsensus = 3;
-        const int maxAttempts = 12;
+        var requiredConsensus = UseFastOcrMode ? 1 : 2;
+        var maxAttempts = UseFastOcrMode ? 4 : 10;
 
         _burstReadCts = new CancellationTokenSource();
         var cancellationToken = _burstReadCts.Token;
@@ -566,13 +605,19 @@
         IsBurstReading = true;
         StatusMessage = "Burst reading started. Hold the camera still.";
 
-        var lastSignature = string.Empty;
-        var currentStreak = 0;
+        var activePrefixes = Prefixes.Where(prefix => prefix.IsActive).Select(prefix => prefix.Value).ToList();
+        var signatureHits = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var codeHits = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var bestCodeOverall = string.Empty;
+        var bestCodeOverallHits = 0;
         string? finalText = null;
         string? finalDataUrl = null;
 
         try
         {
+            // Keep burst start non-blocking so camera stream stays responsive.
+            EnsureBurstWarmupStarted();
+
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -583,40 +628,90 @@
                     throw new OperationCanceledException("Camera is no longer running.", cancellationToken);
                 }
 
-                var dataUrl = await CaptureGuideFrameDataUrlAsync();
-                if (string.IsNullOrWhiteSpace(dataUrl))
-                {
-                    continue;
-                }
+                var attemptResult = UseFastOcrMode
+                    ? await JS.InvokeAsync<BurstOcrResult>(
+                        "pmstools.ocrFromVideo",
+                        "cameraStream",
+                        BuildVideoCaptureOptions(includeDataUrl: false),
+                        BuildBurstFastOcrOptions())
+                    : await JS.InvokeAsync<BurstOcrResult>(
+                        "pmstools.ocrFromVideoWithFallback",
+                        "cameraStream",
+                        BuildVideoCaptureOptions(includeDataUrl: false),
+                        BuildBurstFastOcrOptions(),
+                        BuildBurstFallbackOcrOptions(),
+                        6);
 
-                var text = await ReadImageAsync(dataUrl, preprocess: true, useSelectedArea: false);
-                var activePrefixes = Prefixes.Where(prefix => prefix.IsActive).Select(prefix => prefix.Value);
+                var text = attemptResult?.Text ?? string.Empty;
                 var parsedCodes = Parser.ParseCodes(text ?? string.Empty, activePrefixes).ToList();
-                var signature = parsedCodes.Count > 0 ? string.Join("|", parsedCodes) : string.Empty;
+                var signature = parsedCodes.Count > 0
+                    ? string.Join("|", parsedCodes.OrderBy(code => code, StringComparer.OrdinalIgnoreCase))
+                    : string.Empty;
 
-                if (!string.IsNullOrWhiteSpace(signature) && string.Equals(signature, lastSignature, StringComparison.OrdinalIgnoreCase))
+                var signatureHitCount = 0;
+                if (!string.IsNullOrWhiteSpace(signature))
                 {
-                    currentStreak++;
-                }
-                else if (!string.IsNullOrWhiteSpace(signature))
-                {
-                    lastSignature = signature;
-                    currentStreak = 1;
-                }
-                else
-                {
-                    currentStreak = 0;
+                    signatureHits.TryGetValue(signature, out signatureHitCount);
+                    signatureHitCount++;
+                    signatureHits[signature] = signatureHitCount;
                 }
 
-                StatusMessage = currentStreak > 0
-                    ? $"Burst read {attempt}/{maxAttempts}: stability {currentStreak}/{requiredConsensus}."
+                var bestCodeHitCount = 0;
+                string? bestCode = null;
+                foreach (var code in parsedCodes.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    codeHits.TryGetValue(code, out var codeHitCount);
+                    codeHitCount++;
+                    codeHits[code] = codeHitCount;
+
+                    if (codeHitCount > bestCodeHitCount)
+                    {
+                        bestCodeHitCount = codeHitCount;
+                        bestCode = code;
+                    }
+
+                    if (codeHitCount > bestCodeOverallHits)
+                    {
+                        bestCodeOverallHits = codeHitCount;
+                        bestCodeOverall = code;
+                    }
+                }
+
+                var consensusProgress = Math.Max(signatureHitCount, bestCodeHitCount);
+
+                StatusMessage = consensusProgress > 0
+                    ? $"Burst read {attempt}/{maxAttempts}: consensus {consensusProgress}/{requiredConsensus}."
                     : $"Burst read {attempt}/{maxAttempts}: unstable, keep still.";
                 await InvokeAsync(StateHasChanged);
 
-                if (currentStreak >= requiredConsensus)
+                if (consensusProgress >= requiredConsensus)
                 {
-                    finalText = text;
-                    finalDataUrl = dataUrl;
+                    if (!string.IsNullOrWhiteSpace(signature) && signatureHitCount >= requiredConsensus)
+                    {
+                        finalText = text;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(bestCode) && bestCodeHitCount >= requiredConsensus)
+                    {
+                        // Stabilize on a repeated code even if complete signature ordering varies.
+                        finalText = bestCode;
+                    }
+                    else
+                    {
+                        finalText = text;
+                    }
+
+                    var imageResult = await JS.InvokeAsync<BurstOcrResult>(
+                        "pmstools.ocrFromVideo",
+                        "cameraStream",
+                        BuildVideoCaptureOptions(includeDataUrl: true),
+                        BuildBurstFastOcrOptions());
+                    finalDataUrl = imageResult?.DataUrl;
+
+                    if (string.IsNullOrWhiteSpace(finalDataUrl))
+                    {
+                        finalDataUrl = await CaptureGuideFrameDataUrlAsync();
+                    }
+
                     await JS.InvokeVoidAsync("pmstools.stopCamera", "cameraStream");
                     IsCameraOn = false;
                     break;
@@ -626,17 +721,27 @@
                 await Task.Yield();
             }
 
+            if (string.IsNullOrWhiteSpace(finalText) && bestCodeOverallHits >= requiredConsensus && !string.IsNullOrWhiteSpace(bestCodeOverall))
+            {
+                finalText = bestCodeOverall;
+                finalDataUrl = await CaptureGuideFrameDataUrlAsync();
+                await JS.InvokeVoidAsync("pmstools.stopCamera", "cameraStream");
+                IsCameraOn = false;
+            }
+
             if (!string.IsNullOrWhiteSpace(finalText) && !string.IsNullOrWhiteSpace(finalDataUrl))
             {
                 OcrText = finalText;
                 LastImageDataUrl = finalDataUrl;
                 LastImageComesFromFile = false;
-                LastImageUsesPreprocess = true;
+                LastImageUsesPreprocess = !UseFastOcrMode;
                 ResetCropSelection();
                 _cropSelectorNeedsSync = true;
 
                 await RebuildFromOcrText();
-                StatusMessage = "OCR completed with burst consensus.";
+                StatusMessage = bestCodeOverallHits >= requiredConsensus
+                    ? "OCR completed with burst consensus."
+                    : "OCR completed with best candidate from burst.";
             }
             else
             {
@@ -660,11 +765,58 @@
         }
     }
 
+    private void EnsureBurstWarmupStarted()
+    {
+        if (_burstWarmupTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        _burstWarmupTask = WarmupBurstOcrAsync();
+    }
+
+    private async Task EnsureBurstWarmupCompletedAsync()
+    {
+        EnsureBurstWarmupStarted();
+
+        if (_burstWarmupTask is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _burstWarmupTask;
+        }
+        catch
+        {
+            // Warmup is best effort; OCR path has its own runtime fallbacks.
+        }
+    }
+
+    private async Task WarmupBurstOcrAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("pmstools.prewarmBurstOcr", "eng", !UseFastOcrMode);
+        }
+        catch
+        {
+            // Ignore warmup failures and allow normal OCR execution to proceed.
+        }
+    }
+
     private async Task<string?> CaptureGuideFrameDataUrlAsync()
     {
+        return await JS.InvokeAsync<string?>("pmstools.captureFrameDataUrl", "cameraStream", BuildVideoCaptureOptions(includeDataUrl: false));
+    }
+
+    private Dictionary<string, object?> BuildVideoCaptureOptions(bool includeDataUrl)
+    {
         var guideRect = CameraGuideRect;
-        return await JS.InvokeAsync<string?>("pmstools.captureFrameDataUrl", "cameraStream", new Dictionary<string, object?>
+        return new Dictionary<string, object?>
         {
+            ["includeDataUrl"] = includeDataUrl,
             ["crop"] = new Dictionary<string, object?>
             {
                 ["mode"] = "normalized",
@@ -673,7 +825,7 @@
                 ["width"] = guideRect.Width / 100d,
                 ["height"] = guideRect.Height / 100d
             }
-        });
+        };
     }
 
     private async Task HandleFileSelected(InputFileChangeEventArgs args)
@@ -694,11 +846,23 @@
             var dataUrl = $"data:{file.ContentType};base64,{base64}";
             LastImageDataUrl = dataUrl;
             LastImageComesFromFile = true;
-            LastImageUsesPreprocess = true;
+            LastImageUsesPreprocess = !UseFastOcrMode;
             ResetCropSelection();
             _cropSelectorNeedsSync = true;
-            return await ReadImageAsync(dataUrl, preprocess: true, useSelectedArea: false);
+            return await ReadImageAsync(dataUrl, preprocess: !UseFastOcrMode, useSelectedArea: false);
         });
+    }
+
+    private void SetOcrMode(bool fastMode)
+    {
+        if (UseFastOcrMode == fastMode)
+        {
+            return;
+        }
+
+        UseFastOcrMode = fastMode;
+        LastImageUsesPreprocess = !UseFastOcrMode;
+        EnsureBurstWarmupStarted();
     }
 
     [JSInvokable]
@@ -751,25 +915,29 @@
 
     private Dictionary<string, object?> BuildOcrOptions(bool preprocess, bool useSelectedArea)
     {
+        var psm = UseFastOcrMode ? 6 : 11;
+        var dpi = UseFastOcrMode ? 180 : 300;
+
         var options = new Dictionary<string, object?>
         {
             ["preprocess"] = preprocess,
             ["whitelist"] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
             ["lang"] = "eng",
-            ["psm"] = 11,
-            ["dpi"] = 300
+            ["psm"] = psm,
+            ["dpi"] = dpi,
+            ["useOpenCv"] = !UseFastOcrMode
         };
 
         if (preprocess)
         {
-            options["maxDim"] = 1600;
-            options["adaptiveThreshold"] = true;
-            options["adaptiveBlockSize"] = 31;
-            options["adaptiveC"] = 7;
-            options["denoiseKernelSize"] = 3;
-            options["closeKernelSize"] = 2;
-            options["threshold"] = 165;
-            options["contrast"] = 1.2;
+            options["maxDim"] = UseFastOcrMode ? 900 : 1600;
+            options["adaptiveThreshold"] = !UseFastOcrMode;
+            options["adaptiveBlockSize"] = UseFastOcrMode ? 21 : 31;
+            options["adaptiveC"] = UseFastOcrMode ? 5 : 7;
+            options["denoiseKernelSize"] = UseFastOcrMode ? 1 : 3;
+            options["closeKernelSize"] = UseFastOcrMode ? 1 : 2;
+            options["threshold"] = UseFastOcrMode ? 160 : 165;
+            options["contrast"] = UseFastOcrMode ? 1.1 : 1.2;
         }
 
         if (useSelectedArea)
@@ -785,6 +953,50 @@
         }
 
         return options;
+    }
+
+    private Dictionary<string, object?> BuildBurstFastOcrOptions()
+    {
+        // Fast mode prioritizes throughput; accurate mode keeps a solid first pass.
+        return new Dictionary<string, object?>
+        {
+            ["preprocess"] = !UseFastOcrMode,
+            ["whitelist"] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            ["lang"] = "eng",
+            ["psm"] = UseFastOcrMode ? 6 : 11,
+            ["dpi"] = UseFastOcrMode ? 180 : 260,
+            ["maxDim"] = UseFastOcrMode ? 900 : 1200,
+            ["adaptiveThreshold"] = !UseFastOcrMode,
+            ["adaptiveBlockSize"] = UseFastOcrMode ? 21 : 27,
+            ["adaptiveC"] = UseFastOcrMode ? 5 : 6,
+            ["threshold"] = UseFastOcrMode ? 160 : 165,
+            ["denoiseKernelSize"] = UseFastOcrMode ? 1 : 2,
+            ["closeKernelSize"] = UseFastOcrMode ? 1 : 2,
+            ["contrast"] = UseFastOcrMode ? 1.1 : 1.2,
+            ["useOpenCv"] = false
+        };
+    }
+
+    private static Dictionary<string, object?> BuildBurstFallbackOcrOptions()
+    {
+        // Quality fallback used only when fast pass did not parse any code.
+        return new Dictionary<string, object?>
+        {
+            ["preprocess"] = true,
+            ["whitelist"] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            ["lang"] = "eng",
+            ["psm"] = 11,
+            ["dpi"] = 300,
+            ["maxDim"] = 1400,
+            ["adaptiveThreshold"] = true,
+            ["adaptiveBlockSize"] = 27,
+            ["adaptiveC"] = 6,
+            ["denoiseKernelSize"] = 3,
+            ["closeKernelSize"] = 2,
+            ["threshold"] = 165,
+            ["contrast"] = 1.2,
+            ["useOpenCv"] = true
+        };
     }
 
     private void ResetCropSelection()
